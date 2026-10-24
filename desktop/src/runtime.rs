@@ -7,6 +7,8 @@ use std::{
     time::{Duration, Instant},
 };
 
+use sdl3::gamepad::GamepadType;
+
 use crate::{
     control::{Action, ControlMode, ControlSettings, GamepadFrame, MouseController},
     gamepads::{GamepadInfo, Gamepads},
@@ -32,6 +34,7 @@ pub struct RuntimeState {
     pub settings: ControlSettings,
     pub start_on_login: bool,
     pub controller: Option<String>,
+    pub controller_type: Option<GamepadType>,
     pub error: Option<String>,
     pub ready: bool,
     pub devices: Vec<GamepadInfo>,
@@ -341,6 +344,7 @@ fn run(
                     enabled_before,
                     locale,
                 );
+                state.controller_type = frame.as_ref().and_then(|_| gamepads.active_type());
                 let actions = update_control(
                     &mut state,
                     &mut controller,

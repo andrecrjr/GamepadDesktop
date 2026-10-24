@@ -9,6 +9,7 @@ use gamepad_desktop::{
     onboarding::{Command, Onboarding, Step},
     runtime::RuntimeState,
 };
+use sdl3::gamepad::GamepadType;
 
 const CHAPTERS: [Text; 6] = [
     Text::TourShortWelcome,
@@ -22,7 +23,7 @@ const CHAPTERS: [Text; 6] = [
 pub fn show(ui: &mut egui::Ui, state: &RuntimeState) -> Option<Command> {
     let tour = state.onboarding.as_ref()?;
     let locale = state.locale;
-    auto_family(ui.ctx(), state.controller.as_deref());
+    auto_family(ui.ctx(), state.controller_type);
     let mut command = None;
     egui::Panel::bottom("welcome-navigation")
         .frame(egui::Frame::new().fill(PAGE_BACKGROUND).inner_margin(18))
@@ -319,29 +320,30 @@ fn modes(ui: &mut egui::Ui, locale: Locale) {
     ui.small(locale.text(Text::ResumeGuide));
 }
 
-fn auto_family(context: &egui::Context, name: Option<&str>) {
-    let Some(name) = name else {
+fn family_for_sdl_type(gamepad_type: GamepadType) -> Option<gamepad_icons::ControllerFamily> {
+    match gamepad_type {
+        GamepadType::Xbox360 | GamepadType::XboxOne => Some(gamepad_icons::ControllerFamily::Xbox),
+        GamepadType::PS3 | GamepadType::PS4 | GamepadType::PS5 => {
+            Some(gamepad_icons::ControllerFamily::PlayStation)
+        }
+        _ => None,
+    }
+}
+
+fn auto_family(context: &egui::Context, gamepad_type: Option<GamepadType>) {
+    let Some(gamepad_type) = gamepad_type else {
         return;
     };
-    let name = name.to_ascii_lowercase();
     let id = egui::Id::unique("gamepad-guide-controller-family");
+    let detected_id = egui::Id::unique("welcome-detected-sdl-type");
     context.data_mut(|data| {
         if data.get_temp::<bool>(egui::Id::unique("welcome-manual-family")) != Some(true)
-            && data
-                .get_temp::<String>(egui::Id::unique("welcome-detected-family"))
-                .as_deref()
-                != Some(name.as_str())
+            && data.get_temp::<GamepadType>(detected_id) != Some(gamepad_type)
         {
-            let family = if ["playstation", "sony", "dualsense", "dualshock"]
-                .iter()
-                .any(|part| name.contains(part))
-            {
-                gamepad_icons::ControllerFamily::PlayStation
-            } else {
-                gamepad_icons::ControllerFamily::Xbox
-            };
-            data.insert_temp(id, family);
-            data.insert_temp(egui::Id::unique("welcome-detected-family"), name.clone());
+            if let Some(family) = family_for_sdl_type(gamepad_type) {
+                data.insert_temp(id, family);
+            }
+            data.insert_temp(detected_id, gamepad_type);
         }
     });
 }
@@ -705,6 +707,64 @@ fn scene(ui: &mut egui::Ui, tour: &Onboarding, locale: Locale) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn controller_symbols_help_explains_button_positions_in_all_languages() {
+        for (locale, xbox, playstation) in [
+            (
+                Locale::English,
+                "on Xbox, A is on the bottom and X is on the left",
+                "PlayStation Cross (✕) is on the bottom",
+            ),
+            (
+                Locale::Spanish,
+                "en Xbox, A está abajo y X a la izquierda",
+                "cruz de PlayStation (✕) está abajo",
+            ),
+            (
+                Locale::PortugueseBrazil,
+                "no Xbox, A fica embaixo e X à esquerda",
+                "cruz do PlayStation (✕) fica embaixo",
+            ),
+        ] {
+            let help = locale.text(Text::ControllerSymbolsHelp);
+            assert!(help.contains(xbox), "{locale:?}: {help}");
+            assert!(help.contains(playstation), "{locale:?}: {help}");
+        }
+    }
+
+    #[test]
+    fn sdl_types_select_only_supported_icon_families() {
+        use sdl3::gamepad::GamepadType;
+
+        let context = egui::Context::default();
+        auto_family(&context, Some(GamepadType::PS5));
+        assert_eq!(
+            gamepad_icons::family(&context),
+            gamepad_icons::ControllerFamily::PlayStation
+        );
+
+        for gamepad_type in [GamepadType::Xbox360, GamepadType::XboxOne] {
+            assert_eq!(
+                family_for_sdl_type(gamepad_type),
+                Some(gamepad_icons::ControllerFamily::Xbox)
+            );
+        }
+        for gamepad_type in [GamepadType::PS3, GamepadType::PS4, GamepadType::PS5] {
+            assert_eq!(
+                family_for_sdl_type(gamepad_type),
+                Some(gamepad_icons::ControllerFamily::PlayStation)
+            );
+        }
+        for gamepad_type in [
+            GamepadType::Unknown,
+            GamepadType::Standard,
+            GamepadType::NintendoSwitchPro,
+            GamepadType::NintendoSwitchJoyconPair,
+        ] {
+            assert_eq!(family_for_sdl_type(gamepad_type), None);
+        }
+    }
 
     #[test]
     fn controller_diagram_uses_svg_buttons_for_both_families() {

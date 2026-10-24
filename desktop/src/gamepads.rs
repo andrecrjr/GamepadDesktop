@@ -6,7 +6,7 @@ use std::{
 
 use sdl3::{
     EventPump, GamepadSubsystem, JoystickSubsystem, Sdl,
-    gamepad::{Axis, Button as PadButton, Gamepad},
+    gamepad::{Axis, Button as PadButton, Gamepad, GamepadType},
     joystick::JoystickId,
 };
 
@@ -124,6 +124,10 @@ impl Gamepads {
 
     pub fn name(&self) -> Option<String> {
         self.active.as_ref().and_then(Gamepad::name)
+    }
+
+    pub fn active_type(&self) -> Option<GamepadType> {
+        self.active.as_ref().map(Gamepad::r#type)
     }
 
     pub fn import_mapping(&mut self, input: &str) -> Result<(), String> {

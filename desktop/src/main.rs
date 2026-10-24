@@ -896,8 +896,9 @@ fn shortcut_guide(ui: &mut egui::Ui, locale: Locale, shortcuts: &[(&str, &str)])
         });
 }
 
-#[cfg(target_os = "linux")]
+#[cfg(any(target_os = "linux", target_os = "windows"))]
 fn acquire_instance_lock() -> std::io::Result<Option<std::fs::File>> {
+    #[cfg(target_os = "linux")]
     let directory = std::env::var_os("XDG_RUNTIME_DIR")
         .map(std::path::PathBuf::from)
         .or_else(|| {
@@ -905,13 +906,29 @@ fn acquire_instance_lock() -> std::io::Result<Option<std::fs::File>> {
         })
         .ok_or_else(|| std::io::Error::other("XDG_RUNTIME_DIR and HOME are unavailable"))?
         .join("gamepad-desktop");
+
+    #[cfg(target_os = "windows")]
+    let directory = std::env::var_os("LOCALAPPDATA")
+        .map(std::path::PathBuf::from)
+        .or_else(|| {
+            std::env::var_os("USERPROFILE")
+                .map(|home| std::path::PathBuf::from(home).join("AppData").join("Local"))
+        })
+        .ok_or_else(|| std::io::Error::other("LOCALAPPDATA and USERPROFILE are unavailable"))?
+        .join("gamepad-desktop");
+
     std::fs::create_dir_all(&directory)?;
+    acquire_instance_lock_at(&directory.join("desktop.lock"))
+}
+
+#[cfg(any(target_os = "linux", target_os = "windows"))]
+fn acquire_instance_lock_at(path: &std::path::Path) -> std::io::Result<Option<std::fs::File>> {
     let lock = std::fs::OpenOptions::new()
         .create(true)
         .truncate(false)
         .read(true)
         .write(true)
-        .open(directory.join("desktop.lock"))?;
+        .open(path)?;
     match lock.try_lock() {
         Ok(()) => Ok(Some(lock)),
         Err(std::fs::TryLockError::WouldBlock) => Ok(None),
@@ -921,7 +938,7 @@ fn acquire_instance_lock() -> std::io::Result<Option<std::fs::File>> {
 
 fn main() -> eframe::Result {
     let background_start = std::env::args_os().any(|argument| argument == "--background");
-    #[cfg(target_os = "linux")]
+    #[cfg(any(target_os = "linux", target_os = "windows"))]
     let _instance_lock = match acquire_instance_lock() {
         Ok(Some(lock)) => lock,
         Ok(None) => return Ok(()),
@@ -985,6 +1002,30 @@ fn main() -> eframe::Result {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[cfg(any(target_os = "linux", target_os = "windows"))]
+    #[test]
+    fn only_one_desktop_instance_can_hold_the_lock() {
+        let unique = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let directory = std::env::temp_dir().join(format!(
+            "gamepad-desktop-lock-{}-{unique}",
+            std::process::id()
+        ));
+        std::fs::create_dir_all(&directory).unwrap();
+        let path = directory.join("desktop.lock");
+
+        let first = acquire_instance_lock_at(&path)
+            .unwrap()
+            .expect("first instance should acquire the lock");
+        assert!(acquire_instance_lock_at(&path).unwrap().is_none());
+        drop(first);
+        assert!(acquire_instance_lock_at(&path).unwrap().is_some());
+
+        let _ = std::fs::remove_dir_all(directory);
+    }
 
     #[cfg(target_os = "windows")]
     #[test]
