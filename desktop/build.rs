@@ -20,5 +20,12 @@ fn main() {
             .set_icon("assets/gamepad-desktop.ico")
             .compile()
             .expect("failed to compile the Windows app icon");
+
+        // GNU drops the unreferenced resource archive when this package also
+        // builds a library. Link the resource object directly into the app.
+        if target.ends_with("windows-gnu") {
+            let output = std::env::var("OUT_DIR").expect("Cargo sets the build output directory");
+            println!("cargo:rustc-link-arg-bin=gamepad-desktop={output}/resource.o");
+        }
     }
 }

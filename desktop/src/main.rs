@@ -164,9 +164,12 @@ impl eframe::App for GamepadDesktopApp {
                     .inner_margin(14)
                     .show(ui, |ui| {
                         ui.horizontal(|ui| {
-                            let (bar, _) =
-                                ui.allocate_exact_size(egui::vec2(4.0, 28.0), egui::Sense::hover());
-                            ui.painter().rect_filled(bar, 2.0, ACCENT);
+                            ui.add(
+                                egui::Image::new(egui::include_image!(
+                                    "../assets/gamepad-desktop.svg"
+                                ))
+                                .fit_to_exact_size(egui::vec2(48.0, 48.0)),
+                            );
                             ui.label(RichText::new(APP_NAME).strong().size(22.0));
                             if state.ready && state.error.is_none() && state.controller.is_some() {
                                 let (mode, color) = if state.keyboard.open {

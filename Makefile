@@ -13,7 +13,7 @@ WINDOWS_PACKAGE := $(DESKTOP_DIST_DIR)/GamepadDesktop-Windows-x64.zip
 LINUX_BINARY := desktop/target/$(LINUX_TARGET)/release/gamepad-desktop
 LINUX_PACKAGE := $(DESKTOP_DIST_DIR)/GamepadDesktop-Linux-x64.tar.gz
 
-.PHONY: help dev run build check lint format format-check test \
+.PHONY: help dev run build check lint format format-check test brand-assets \
 	web-install web-dev web-build web-package web-typecheck web-lint web-format web-format-check web-test \
 	desktop-run desktop-build desktop-clean-dist desktop-release desktop-linux desktop-linux-package desktop-windows desktop-packages \
 	desktop-check desktop-lint desktop-format desktop-format-check desktop-test desktop-preview
@@ -23,6 +23,7 @@ help:
 		'Gamepad Desktop and browser extension' \
 		'' \
 		'Main: make dev | run | build | check | lint | format | format-check | test' \
+		'  brand-assets   Generate every brand icon from assets/gamepad-desktop.svg' \
 		'  dev            Run the browser extension in WXT development mode' \
 		'  run            Run the Rust desktop app' \
 		'  build          Build the extension and the desktop app for this host' \
@@ -39,6 +40,9 @@ help:
 		'desktop-windows builds and packages x64 Windows; install the Rust target, MinGW, CMake, and zip first.'
 
 dev: web-dev
+
+brand-assets:
+	$(NPM) --prefix extension run brand:generate
 
 run: desktop-run
 
