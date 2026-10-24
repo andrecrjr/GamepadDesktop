@@ -24,6 +24,8 @@ Operar o desktop pelo controle em Windows e Linux: navegar por elementos acessí
 Esta entrega prioriza as partes de entrada e mouse das etapas 1, 2, 3, 5 e 7. A navegação por itens ainda não foi implementada. A entrada de texto em campos externos tem um primeiro fluxo, sujeito ao suporte de acessibilidade do aplicativo e à validação física em cada sistema.
 
 - [x] Painel com conexão, pausa, velocidade e zona morta.
+- [x] Práticas separadas de clique esquerdo, clique direito, arrastar e rolar no onboarding, com demonstrações locais.
+- [x] Escala do painel de 100% a 175%, com padrão de 125%, ajuste no onboarding e nas configurações e preferência persistente.
 - [x] Loop de controle independente do foco da janela do app.
 - [x] Bandeja com abrir/recolher painel e encerramento explícito; fechar o painel mantém o serviço ativo.
 - [x] Validar recolher/reabrir e encerrar pela bandeja no COSMIC/Wayland sem reiniciar o controle.
