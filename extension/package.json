@@ -4,6 +4,8 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "brand:generate": "node scripts/generate-brand-assets.ts",
+    "brand:check": "node scripts/generate-brand-assets.ts --check",
     "dev": "wxt",
     "build": "wxt build",
     "build:e2e": "wxt build --mode e2e",
@@ -17,6 +19,7 @@
   },
   "devDependencies": {
     "@playwright/test": "^1.64.1",
+    "@resvg/resvg-js": "^2.6.2",
     "@types/chrome": "^0.3.5",
     "oxfmt": "^0.73.0",
     "oxlint": "^1.88.0",

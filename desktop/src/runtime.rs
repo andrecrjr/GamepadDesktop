@@ -7,25 +7,34 @@ use std::{
     time::{Duration, Instant},
 };
 
+use sdl3::gamepad::GamepadType;
+
 use crate::{
     control::{Action, ControlMode, ControlSettings, GamepadFrame, MouseController},
     gamepads::{GamepadInfo, Gamepads},
     i18n::Locale,
     keyboard::{KeyboardSession, KeyboardSettings},
     notifications::{Notification, NotificationService},
+    onboarding::{Command as TourCommand, Onboarding},
     platform::Platform,
-    preferences::DesktopPreferences,
+    preferences::{DesktopPreferences, UiScale},
 };
 
 const ACTIVE_POLL_INTERVAL: Duration = Duration::from_millis(8);
 const IDLE_POLL_INTERVAL: Duration = Duration::from_millis(16);
 
+#[cfg(test)]
+#[path = "onboarding_runtime_tests.rs"]
+mod onboarding_tests;
+
 #[derive(Clone, Default)]
 pub struct RuntimeState {
     pub locale: Locale,
+    pub ui_scale: UiScale,
     pub settings: ControlSettings,
     pub start_on_login: bool,
     pub controller: Option<String>,
+    pub controller_type: Option<GamepadType>,
     pub error: Option<String>,
     pub ready: bool,
     pub devices: Vec<GamepadInfo>,
@@ -33,6 +42,8 @@ pub struct RuntimeState {
     pub mapping_message: Option<String>,
     pub keyboard: KeyboardSession,
     pub preferences_error: Option<String>,
+    pub onboarding_completed: bool,
+    pub onboarding: Option<Onboarding>,
     pending_mapping: Option<String>,
 }
 
@@ -43,14 +54,41 @@ pub struct DesktopRuntime {
     notifications: NotificationService,
 }
 
+impl RuntimeState {
+    fn desktop_input_enabled(&self) -> bool {
+        self.onboarding.is_none()
+            && self.settings.enabled
+            && self.settings.mode == ControlMode::Desktop
+    }
+
+    fn native_mouse_state(&self, connected: bool) -> (bool, bool) {
+        (
+            self.desktop_input_enabled(),
+            connected && self.onboarding.is_none(),
+        )
+    }
+
+    fn finish_onboarding(&mut self, mode: Option<ControlMode>) {
+        self.onboarding = None;
+        self.onboarding_completed = true;
+        if let Some(mode) = mode {
+            self.settings.mode = mode;
+            self.settings.enabled = true;
+        }
+    }
+}
+
 impl Default for DesktopRuntime {
     fn default() -> Self {
         let preferences = DesktopPreferences::load();
         let startup_error = crate::startup::set_enabled(preferences.start_on_login).err();
         let initial = RuntimeState {
             locale: preferences.locale,
+            ui_scale: preferences.ui_scale,
             settings: preferences.controls,
             start_on_login: preferences.start_on_login,
+            onboarding_completed: preferences.onboarding_completed,
+            onboarding: (!preferences.onboarding_completed).then(Onboarding::default),
             preferences_error: startup_error,
             keyboard: KeyboardSession::with_locale(preferences.locale, KeyboardSettings::load()),
             ..RuntimeState::default()
@@ -86,6 +124,49 @@ impl Default for DesktopRuntime {
 }
 
 impl DesktopRuntime {
+    pub fn reopen_onboarding(&self) {
+        self.state.lock().expect("runtime state lock").onboarding = Some(Onboarding::default());
+    }
+
+    pub fn onboarding_command(&self, command: TourCommand) {
+        let mut state = self.state.lock().expect("runtime state lock");
+        match command {
+            TourCommand::Scale(scale) => state.ui_scale = scale,
+            TourCommand::Language(locale) => {
+                state.locale = locale;
+                state.keyboard.locale = locale;
+            }
+            TourCommand::Skip => state.finish_onboarding(None),
+            TourCommand::Finish(mode) => state.finish_onboarding(Some(mode)),
+            _ => {
+                if let Some(tour) = &mut state.onboarding {
+                    match command {
+                        TourCommand::Next => tour.next(),
+                        TourCommand::Back => tour.back(),
+                        TourCommand::ToggleDemo => tour.toggle_demo(),
+                        _ => {}
+                    }
+                }
+            }
+        }
+        // A failed platform connection stops the worker; still remember a skipped/completed tour.
+        let save_now = state.error.is_some()
+            && (state.onboarding.is_none() || matches!(command, TourCommand::Scale(_)));
+        drop(state);
+        if save_now && let Err(error) = self.save_preferences() {
+            self.state
+                .lock()
+                .expect("runtime state lock")
+                .preferences_error = Some(error);
+        }
+    }
+
+    pub fn update_onboarding_demo(&self, elapsed: Duration) {
+        if let Some(tour) = &mut self.state.lock().expect("runtime state lock").onboarding {
+            tour.update_demo(elapsed);
+        }
+    }
+
     pub fn state(&self) -> RuntimeState {
         self.state.lock().expect("runtime state lock").clone()
     }
@@ -129,8 +210,10 @@ impl DesktopRuntime {
         let state = self.state.lock().expect("runtime state lock");
         DesktopPreferences {
             locale: state.locale,
+            ui_scale: state.ui_scale,
             controls: state.settings,
             start_on_login: state.start_on_login,
+            onboarding_completed: state.onboarding_completed,
         }
         .save()
     }
@@ -190,14 +273,7 @@ fn run(
     controller.keyboard.presentation = platform.keyboard_presentation();
     controller.keyboard.status = platform.keyboard_overlay_error().map(str::to_owned);
     state.lock().expect("runtime state lock").keyboard = controller.keyboard.clone();
-    let mut saved_preferences = {
-        let state = state.lock().expect("runtime state lock");
-        DesktopPreferences {
-            locale: state.locale,
-            controls: state.settings,
-            start_on_login: state.start_on_login,
-        }
-    };
+    let mut saved_preferences = DesktopPreferences::load();
     let mut pending_preferences: Option<(DesktopPreferences, Instant)> = None;
     let mut preference_save: Option<(DesktopPreferences, JoinHandle<Result<(), String>>)> = None;
     let mut last_tick = Instant::now();
@@ -268,6 +344,7 @@ fn run(
                     enabled_before,
                     locale,
                 );
+                state.controller_type = frame.as_ref().and_then(|_| gamepads.active_type());
                 let actions = update_control(
                     &mut state,
                     &mut controller,
@@ -293,11 +370,11 @@ fn run(
                 notification_service.send(notification);
             }
             last_tick = now;
-            let settings = state.lock().expect("runtime state lock").settings;
-            platform.update_mouse_mode(
-                settings.enabled && settings.mode == ControlMode::Desktop,
-                frame.is_some(),
-            )?;
+            let (input_enabled, native_connected) = state
+                .lock()
+                .expect("runtime state lock")
+                .native_mouse_state(frame.is_some());
+            platform.update_mouse_mode(input_enabled, native_connected)?;
             platform.update_native_dpad_target();
             for action in actions {
                 match action {
@@ -340,8 +417,10 @@ fn run(
                 let state = state.lock().expect("runtime state lock");
                 DesktopPreferences {
                     locale: state.locale,
+                    ui_scale: state.ui_scale,
                     controls: state.settings,
                     start_on_login: state.start_on_login,
+                    onboarding_completed: state.onboarding_completed,
                 }
             };
             if preferences == saved_preferences {
@@ -483,6 +562,15 @@ fn update_control(
 ) -> Vec<Action> {
     controller.keyboard.settings = state.keyboard.settings;
     controller.keyboard.locale = state.locale;
+    if let Some(tour) = &mut state.onboarding {
+        let finish = tour.update(frame, elapsed);
+        let actions = controller.update(None, elapsed, &mut state.settings);
+        publish_keyboard_state(&mut state.keyboard, &controller.keyboard);
+        if let Some(mode) = finish {
+            state.finish_onboarding(Some(mode));
+        }
+        return actions;
+    }
     let actions = controller.update(frame, elapsed, &mut state.settings);
     publish_keyboard_state(&mut state.keyboard, &controller.keyboard);
     actions

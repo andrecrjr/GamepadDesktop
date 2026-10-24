@@ -8,7 +8,7 @@ pub enum ControllerFamily {
 }
 
 #[derive(Clone, Copy, Debug)]
-enum Icon {
+pub(crate) enum Icon {
     LeftStick,
     RightStickUp,
     RightStickDown,
@@ -66,6 +66,13 @@ pub fn show_shortcut_icons(ui: &mut Ui, family: ControllerFamily, button: &str) 
             Icon::DpadLeft,
             Icon::DpadRight,
         ],
+        "Direcional / analógico esquerdo" => &[
+            Icon::DpadUp,
+            Icon::DpadDown,
+            Icon::DpadLeft,
+            Icon::DpadRight,
+            Icon::LeftStick,
+        ],
         "LB / L1" | "L1" => &[Icon::L1],
         "RB / R1" | "R1" => &[Icon::R1],
         "Start + Select / Menu + View" => &[Icon::Menu, Icon::View],
@@ -84,7 +91,7 @@ fn show_icon(ui: &mut Ui, family: ControllerFamily, icon: Icon) {
     ui.add(Image::new(image).fit_to_exact_size(egui::vec2(24.0, 24.0)));
 }
 
-fn image_source(family: ControllerFamily, icon: Icon) -> egui::ImageSource<'static> {
+pub(crate) fn image_source(family: ControllerFamily, icon: Icon) -> egui::ImageSource<'static> {
     match (family, icon) {
         (ControllerFamily::Xbox, Icon::LeftStick) => {
             egui::include_image!("../assets/gamepad-icons/xbox/xbox_stick_l.svg")

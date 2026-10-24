@@ -752,6 +752,12 @@ kbd {
   font-size: 25px;
 }
 
+img.onboarding-icon {
+  width: 34px;
+  height: 34px;
+  object-fit: contain;
+}
+
 .onboarding-cards h3 {
   margin: 0 0 8px;
   color: #e8f1ff;

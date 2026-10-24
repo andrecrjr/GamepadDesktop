@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <title>Gamepad Desktop</title>
+  <desc>Um gamepad simétrico incorpora uma tela de desktop e seu cursor na própria silhueta.</desc>
+  <path
+    d="M198 88h116c18 0 30 12 30 30v40h26c35 0 59 23 69 59l28 126c7 30-12 56-40 56-16 0-28-7-39-21l-45-58c-9-12-22-18-37-18H206c-15 0-28 6-37 18l-45 58c-11 14-23 21-39 21-28 0-47-26-40-56l28-126c10-36 34-59 69-59h26v-40c0-18 12-30 30-30z"
+    fill="#72F3BB"
+    stroke="#0A111F"
+    stroke-linejoin="round"
+    stroke-width="12"
+  />
+  <rect x="188" y="108" width="136" height="104" rx="12" fill="#0A111F" />
+  <path
+    d="M240 127v65l17-18 23 3z"
+    fill="#9681F6"
+    stroke="#9681F6"
+    stroke-linejoin="round"
+    stroke-width="4"
+  />
+  <path d="M127 207h22v27h27v22h-27v27h-22v-27h-27v-22h27z" fill="#0A111F" />
+  <g fill="#0A111F">
+    <circle cx="374" cy="214" r="13" />
+    <circle cx="404" cy="244" r="13" />
+    <circle cx="374" cy="274" r="13" />
+    <circle cx="344" cy="244" r="13" />
+  </g>
+  <rect x="238" y="236" width="36" height="10" rx="5" fill="#0A111F" />
+</svg>

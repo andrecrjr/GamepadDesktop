@@ -2,20 +2,61 @@ use std::path::PathBuf;
 
 use crate::{control::ControlSettings, i18n::Locale};
 
+/// Global interface scale, kept bounded so controls remain reachable.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "snake_case")]
+#[repr(u16)]
+pub enum UiScale {
+    Standard = 100,
+    #[default]
+    Comfortable = 125,
+    Large = 150,
+    ExtraLarge = 175,
+}
+
+impl UiScale {
+    pub const ALL: [Self; 4] = [
+        Self::Standard,
+        Self::Comfortable,
+        Self::Large,
+        Self::ExtraLarge,
+    ];
+
+    pub fn factor(self) -> f32 {
+        self as u16 as f32 / 100.0
+    }
+
+    pub fn step(self, increase: bool) -> Self {
+        let index = Self::ALL
+            .iter()
+            .position(|scale| *scale == self)
+            .unwrap_or(1);
+        Self::ALL[if increase {
+            (index + 1).min(3)
+        } else {
+            index.saturating_sub(1)
+        }]
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(default)]
 pub struct DesktopPreferences {
     pub locale: Locale,
+    pub ui_scale: UiScale,
     pub controls: ControlSettings,
     pub start_on_login: bool,
+    pub onboarding_completed: bool,
 }
 
 impl Default for DesktopPreferences {
     fn default() -> Self {
         Self {
             locale: Locale::detect(),
+            ui_scale: UiScale::default(),
             controls: ControlSettings::default(),
             start_on_login: false,
+            onboarding_completed: false,
         }
     }
 }

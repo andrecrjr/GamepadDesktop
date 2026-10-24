@@ -30,6 +30,18 @@ make web-test
 
 The browser extension has its own npm project and generated files under `extension/`.
 
+## Brand assets
+
+The approved logo lives in [`assets/gamepad-desktop.svg`](assets/gamepad-desktop.svg).
+After editing it, run `make web-install` once, then `make brand-assets` to regenerate
+the desktop SVG/PNG/ICO, site favicons and extension logos/icons. These generated
+files are committed so Rust builds work without Node. CI checks that every copy
+matches the source with `npm --prefix extension run brand:check`.
+
+The Windows ICO includes 16, 20, 24, 32, 48, 64, 128 and 256 px frames. The desktop
+uses the same mark in its header, window icon and system tray. Controller button
+prompts are separate instructional assets.
+
 ## Releases
 
 Conventional Commits on `main` drive semantic-release. A release uses a `desktop-v*` tag and attaches Windows x64 and Linux x64 desktop packages. The extension is validated and built separately; it is not included in desktop releases.
