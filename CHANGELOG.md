@@ -1,3 +1,12 @@
+# [0.5.0](https://github.com/andrecrjr/GamepadDesktop/compare/desktop-v0.4.0...desktop-v0.5.0) (2026-10-25)
+
+
+### Features
+
+* add guided desktop onboarding and adjustable interface scale ([b1e90e5](https://github.com/andrecrjr/GamepadDesktop/commit/b1e90e51522e7200e66df9b141124a1a7ddecb73))
+* **desktop:** improve onboarding and instance locking ([6da6e74](https://github.com/andrecrjr/GamepadDesktop/commit/6da6e7416b58082e037e5a23e52bc7974fb0f4da))
+* unify Gamepad Desktop branding across platforms ([e60a452](https://github.com/andrecrjr/GamepadDesktop/commit/e60a452c111180d232eee6eb27c96c819c849cea))
+
 # [0.4.0](https://github.com/andrecrjr/GamepadDesktop/compare/desktop-v0.3.2...desktop-v0.4.0) (2026-10-24)
 
 
