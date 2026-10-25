@@ -16,24 +16,43 @@ No Windows, baixe e extraia o [pacote x64](dist/GamepadDesktop-Windows-x64.zip),
 
 No Linux, baixe e extraia o [pacote x64](dist/GamepadDesktop-Linux-x64.tar.gz). As instruções para executar o app e as permissões necessárias estão no [guia do sistema](docs/system-overview.md#como-iniciar-no-linux).
 
+## Boas-vindas e prática guiada
+
+O capítulo de mouse tem cinco práticas: mover o ponteiro, clique esquerdo, clique direito com menu de contexto, segurar/mover/soltar para arrastar e rolar páginas. Cada etapa destaca os SVGs dos botões de Xbox/PlayStation e tem demonstração sem controle conectado.
+
+A interface começa ampliada em 125% para facilitar a leitura à distância. Use **A− / A+** no onboarding ou nas configurações para escolher de 100% a 175%. A escolha é salva automaticamente e vale para os textos, botões e ícones do painel.
+
+Na primeira abertura, o roteiro apresenta os modos **Desktop** e **Jogo**, depois ensina um comando por vez: mover, clicar, rolar, abrir/digitar/fechar o teclado, alternar modos e pausar.
+
+- A prática usa os mesmos comandos do aplicativo em um desktop simulado, sem enviar cliques ou teclas aos outros programas.
+- Sem controle, use **Ver demonstração** ou **Continuar**. Você pode pular qualquer etapa ou todo o roteiro.
+- Durante o roteiro, **LB/L1** volta e **RB/R1** continua. Mouse e teclado (Tab/Enter) também funcionam.
+- **Select duas vezes** alterna Desktop/Jogo. **Start + Select** pausa/retoma o modo Desktop; são gestos diferentes.
+- Ao terminar, escolha **Começar no Desktop** ou **Começar no modo Jogo**. A conclusão fica salva nas preferências.
+- **Rever boas-vindas**, no rodapé do painel, reabre a prática. O roteiro respeita o idioma escolhido e permite selecionar símbolos de Xbox/PlayStation.
+
+Configurações de versões anteriores continuam válidas e recebem o roteiro uma vez. A disponibilidade do teclado real depende do sistema; a demonstração funciona mesmo quando o teclado visual não está disponível na sessão.
+
 ## Comandos principais
 
-| Controle                             | Ação                                                   |
-| ------------------------------------ | ------------------------------------------------------ |
-| Analógico esquerdo                    | Mover o ponteiro                                        |
-| Analógico direito, cima/baixo         | Rolar a página                                          |
-| Direcional                            | Enviar setas; segurar para repetir                      |
-| Botão inferior — A / ✕ / B no Switch  | Clicar; no teclado visual, digitar a tecla selecionada  |
-| Botão direito — B / ○ / A no Switch   | Clique direito                                           |
-| Botão esquerdo — X / □ / Y no Switch  | Enter                                                    |
-| Botão superior — Y / △ / X no Switch  | Escape                                                   |
-| L3                                    | Abrir o lançador do sistema                             |
-| LB / L1                               | Tab                                                      |
-| RB / R1                               | Alt+Tab                                                  |
-| R3 — pressionar o analógico direito   | Abrir ou fechar o teclado visual                        |
-| Start + Select / Menu + View          | Pausar ou retomar; solte os botões e centralize para retomar |
+| Controle                             | Ação                                                         |
+| ------------------------------------ | ------------------------------------------------------------ |
+| Analógico esquerdo                   | Mover o ponteiro                                             |
+| Analógico direito, cima/baixo        | Rolar a página                                               |
+| Direcional                           | Enviar setas; segurar para repetir                           |
+| Botão inferior — A / ✕ / B no Switch | Clicar; no teclado visual, digitar a tecla selecionada       |
+| Botão direito — B / ○ / A no Switch  | Clique direito                                               |
+| Botão esquerdo — X / □ / Y no Switch | Enter                                                        |
+| Botão superior — Y / △ / X no Switch | Escape                                                       |
+| L3                                   | Abrir o lançador do sistema                                  |
+| LB / L1                              | Tab                                                          |
+| RB / R1                              | Alt+Tab                                                      |
+| R3 — pressionar o analógico direito  | Abrir ou fechar o teclado visual                             |
+| Start + Select / Menu + View         | Pausar ou retomar; solte os botões e centralize para retomar |
 
 Os nomes e comandos completos aparecem no painel, incluindo os equivalentes de Xbox, PlayStation e Switch. A seção de ajustes permite escolher o controle, ajustar velocidade e personalizar o teclado.
+
+Com o teclado visual aberto, o **analógico esquerdo** também move a seleção entre as teclas e navega pelos ajustes. Ele respeita a zona morta e a repetição configuradas. Nas diagonais, o eixo mais inclinado define a direção; se você usar o direcional ao mesmo tempo, ele tem prioridade.
 
 ## O que saber antes de usar
 

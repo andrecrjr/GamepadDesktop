@@ -44,7 +44,10 @@ pub const MOUSE_SHORTCUTS: &[(&str, &str)] = &[
 ];
 
 pub const KEYBOARD_SHORTCUTS: &[(&str, &str)] = &[
-    ("Direcional", "Mover a seleção pelo teclado"),
+    (
+        "Direcional / analógico esquerdo",
+        "Mover a seleção pelo teclado",
+    ),
     ("A / botão inferior", "Ativar a tecla selecionada"),
     ("B / botão direito", "Apagar um caractere"),
     ("X / botão esquerdo", "Inserir Enter"),
@@ -188,6 +191,7 @@ pub enum Action {
     OnScreenKeyboard(bool),
 }
 
+#[derive(Clone)]
 pub struct MouseController {
     pub keyboard: KeyboardSession,
     previous: GamepadFrame,
@@ -319,7 +323,7 @@ impl MouseController {
         }
         if keyboard_uses_gamepad && !keyboard_toggled {
             self.release_mouse(&mut actions);
-            self.update_keyboard(frame, elapsed, &mut actions);
+            self.update_keyboard(frame, elapsed, settings.deadzone, &mut actions);
             self.previous = *frame;
             return actions;
         }
@@ -360,8 +364,8 @@ impl MouseController {
         {
             if !keyboard_toggled
                 && self.repeat_direction(
-                    frame,
-                    button,
+                    frame.pressed(button),
+                    self.previous.pressed(button),
                     index,
                     elapsed,
                     REPEAT_INITIAL_DELAY,
@@ -439,17 +443,17 @@ impl MouseController {
 
     fn repeat_direction(
         &mut self,
-        frame: &GamepadFrame,
-        button: Button,
+        pressed: bool,
+        was_pressed: bool,
         index: usize,
         elapsed: Duration,
         initial_delay: f64,
         repeat_interval: f64,
     ) -> bool {
-        if !frame.pressed(button) {
+        if !pressed {
             return false;
         }
-        if !self.previous.pressed(button) {
+        if !was_pressed {
             self.repeat[index] = initial_delay;
             return true;
         }
@@ -465,22 +469,25 @@ impl MouseController {
         &mut self,
         frame: &GamepadFrame,
         elapsed: Duration,
+        deadzone: f64,
         actions: &mut Vec<Action>,
     ) {
+        let directions = keyboard_directions(frame, deadzone);
+        let previous_directions = keyboard_directions(&self.previous, deadzone);
         if frame.pressed(Button::Start) && !self.previous.pressed(Button::Start) {
             self.keyboard.customizing = !self.keyboard.customizing;
             self.repeat = [f64::from(self.keyboard.settings.repeat_delay_ms) / 1000.0; 4];
             return;
         }
         if self.keyboard.customizing {
-            for (button, delta) in [(Button::Up, -1), (Button::Down, 1)] {
-                if frame.pressed(button) && !self.previous.pressed(button) {
+            for (index, delta) in [(0, -1), (1, 1)] {
+                if directions[index] && !previous_directions[index] {
                     self.keyboard.selected_setting =
                         (self.keyboard.selected_setting as isize + delta).rem_euclid(6) as usize;
                 }
             }
-            for (button, delta) in [(Button::Left, -1), (Button::Right, 1)] {
-                if frame.pressed(button) && !self.previous.pressed(button) {
+            for (index, delta) in [(2, -1), (3, 1)] {
+                if directions[index] && !previous_directions[index] {
                     self.keyboard
                         .settings
                         .adjust(self.keyboard.selected_setting, delta);
@@ -489,26 +496,20 @@ impl MouseController {
             return;
         }
         let settings = self.keyboard.settings.normalized();
-        for (index, (button, row_delta, column_delta)) in [
-            (Button::Up, -1, 0),
-            (Button::Down, 1, 0),
-            (Button::Left, 0, -1),
-            (Button::Right, 0, 1),
-        ]
-        .into_iter()
-        .enumerate()
+        for (index, (row_delta, column_delta)) in
+            [(-1, 0), (1, 0), (0, -1), (0, 1)].into_iter().enumerate()
         {
             let moved = if settings.repeat_enabled {
                 self.repeat_direction(
-                    frame,
-                    button,
+                    directions[index],
+                    previous_directions[index],
                     index,
                     elapsed,
                     f64::from(settings.repeat_delay_ms) / 1000.0,
                     f64::from(settings.repeat_interval_ms) / 1000.0,
                 )
             } else {
-                frame.pressed(button) && !self.previous.pressed(button)
+                directions[index] && !previous_directions[index]
             };
             if moved {
                 self.keyboard.move_selection(row_delta, column_delta);
@@ -567,6 +568,28 @@ impl MouseController {
             Action::KeyboardChord(input, modifiers)
         }
     }
+}
+
+// Digital input wins; a stick tilt selects one dominant axis to avoid diagonal double steps.
+fn keyboard_directions(frame: &GamepadFrame, deadzone: f64) -> [bool; 4] {
+    let mut directions =
+        [Button::Up, Button::Down, Button::Left, Button::Right].map(|button| frame.pressed(button));
+    if directions.iter().any(|pressed| *pressed) {
+        return directions;
+    }
+    let x = axis_value(frame.x, deadzone);
+    let y = axis_value(frame.y, deadzone);
+    if x != 0.0 || y != 0.0 {
+        let index = if x.abs() >= y.abs() {
+            if x > 0.0 { 3 } else { 2 }
+        } else if y > 0.0 {
+            1
+        } else {
+            0
+        };
+        directions[index] = true;
+    }
+    directions
 }
 
 fn axis_value(value: f64, deadzone: f64) -> f64 {

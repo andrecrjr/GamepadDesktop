@@ -32,10 +32,10 @@ Pull requests para `main` executam formatação, lint, verificação de tipos e 
 
 ## Recursos visuais
 
-- `public/gamepad-desktop-icon.svg` é a origem vetorial do ícone da marca.
-- `public/gamepad-desktop-logo.png` é a versão raster do ícone da marca.
+- `../assets/gamepad-desktop.svg` é a única origem vetorial da marca Gamepad Desktop.
+- `public/gamepad-desktop-icon.svg` e `public/gamepad-desktop-logo.png` são versões geradas da marca aprovada.
 - `public/icons/` contém os ícones de 16, 32, 48 e 128 px usados pelo Chrome e como favicon das páginas da extensão.
-- `public/gamepad-desktop-poster.svg` é a origem vetorial do banner promocional; `public/gamepad-desktop-poster.png` é a versão de 1400 × 560 px para o site ou a página da extensão.
+- Rode `make brand-assets` na raiz para atualizar todas as versões do desktop, site e extensão. `npm run brand:check` verifica a sincronização sem alterar arquivos.
 - `public/gamepad-icons/` contém prompts em SVG de Xbox e PlayStation do pacote CC0 Kenney Input Prompts; veja `ASSET_CREDITS.md`.
 
 ## Testar

@@ -10,6 +10,7 @@ use gamepad_desktop::{
     control::{ControlMode, KEYBOARD_SHORTCUTS, MOUSE_SHORTCUTS},
     i18n::{Locale, Text},
     keyboard::{self, KeyboardPosition, KeyboardPresentation, KeyboardSession},
+    preferences::UiScale,
 };
 use std::{
     sync::{Arc, Mutex},
@@ -18,6 +19,7 @@ use std::{
 
 mod gamepad_icons;
 mod keyboard_view;
+mod onboarding_view;
 #[cfg(target_os = "windows")]
 mod windows_keyboard_overlay;
 
@@ -70,6 +72,28 @@ fn configure_desktop_style(context: &egui::Context) {
         style.spacing.button_padding = egui::vec2(12.0, 7.0);
         style.spacing.slider_width = 180.0;
     });
+}
+
+fn interface_scale(ui: &mut egui::Ui, locale: Locale, scale: UiScale) -> Option<UiScale> {
+    let mut selected = scale;
+    ui.horizontal_wrapped(|ui| {
+        ui.label(locale.text(Text::InterfaceSize));
+        if ui
+            .add_enabled(scale != UiScale::Standard, egui::Button::new("A−"))
+            .clicked()
+        {
+            selected = scale.step(false);
+        }
+        ui.label(format!("{}%", scale as u16));
+        if ui
+            .add_enabled(scale != UiScale::ExtraLarge, egui::Button::new("A+"))
+            .clicked()
+        {
+            selected = scale.step(true);
+        }
+    });
+    ui.small(locale.text(Text::InterfaceSizeHelp));
+    (selected != scale).then_some(selected)
 }
 
 fn card_frame() -> egui::Frame {
@@ -142,17 +166,41 @@ impl eframe::App for GamepadDesktopApp {
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
         handle_panel_close(ui.ctx(), &self.panel, self.tray_error.is_none());
         ui.ctx().request_repaint_after(UI_REPAINT_INTERVAL);
+        self.desktop
+            .lock()
+            .expect("desktop runtime lock")
+            .update_onboarding_demo(Duration::from_secs_f32(
+                ui.input(|input| input.stable_dt).clamp(0.0, 0.05),
+            ));
         let mut state = self.desktop.lock().expect("desktop runtime lock").state();
-        let locale = state.locale;
-        let keyboard = state.keyboard.clone();
+        ui.ctx().set_zoom_factor(state.ui_scale.factor());
+        let mut keyboard = state.keyboard.clone();
+        keyboard.open &= state.onboarding.is_none();
         if keyboard.presentation == KeyboardPresentation::Viewport {
             show_keyboard_viewport(ui, keyboard, cfg!(target_os = "windows"));
         }
+        if state.onboarding.is_some() {
+            if let Some(command) = onboarding_view::show(ui, &state) {
+                self.desktop
+                    .lock()
+                    .expect("desktop runtime lock")
+                    .onboarding_command(command);
+            }
+            return;
+        }
+        let locale = state.locale;
         egui::Panel::bottom("desktop-footer").show(ui, |ui| {
-            ui.horizontal(|ui| {
+            ui.horizontal_wrapped(|ui| {
                 ui.hyperlink_to(locale.text(Text::Donate), "https://ko-fi.com/andrecrjr");
                 ui.separator();
                 ui.hyperlink_to(locale.text(Text::Projects), "https://ac-jr.com");
+                ui.separator();
+                if ui.button(locale.text(Text::TourReplay)).clicked() {
+                    self.desktop
+                        .lock()
+                        .expect("desktop runtime lock")
+                        .reopen_onboarding();
+                }
             });
         });
         egui::CentralPanel::default().show(ui, |ui| {
@@ -163,10 +211,13 @@ impl eframe::App for GamepadDesktopApp {
                     .corner_radius(12)
                     .inner_margin(14)
                     .show(ui, |ui| {
-                        ui.horizontal(|ui| {
-                            let (bar, _) =
-                                ui.allocate_exact_size(egui::vec2(4.0, 28.0), egui::Sense::hover());
-                            ui.painter().rect_filled(bar, 2.0, ACCENT);
+                        ui.horizontal_wrapped(|ui| {
+                            ui.add(
+                                egui::Image::new(egui::include_image!(
+                                    "../assets/gamepad-desktop.svg"
+                                ))
+                                .fit_to_exact_size(egui::vec2(48.0, 48.0)),
+                            );
                             ui.label(RichText::new(APP_NAME).strong().size(22.0));
                             if state.ready && state.error.is_none() && state.controller.is_some() {
                                 let (mode, color) = if state.keyboard.open {
@@ -376,6 +427,14 @@ fn show_desktop_settings(
     tray_menu: Option<&TrayMenu>,
 ) {
     accent_heading(ui, state.locale.text(Text::Settings));
+    if let Some(scale) = interface_scale(ui, state.locale, state.ui_scale) {
+        desktop
+            .lock()
+            .expect("desktop runtime lock")
+            .onboarding_command(gamepad_desktop::onboarding::Command::Scale(scale));
+        state.ui_scale = scale;
+    }
+
     let mut locale = state.locale;
     ui.horizontal(|ui| {
         ui.label(state.locale.text(Text::Language));
@@ -837,8 +896,9 @@ fn shortcut_guide(ui: &mut egui::Ui, locale: Locale, shortcuts: &[(&str, &str)])
         });
 }
 
-#[cfg(target_os = "linux")]
+#[cfg(any(target_os = "linux", target_os = "windows"))]
 fn acquire_instance_lock() -> std::io::Result<Option<std::fs::File>> {
+    #[cfg(target_os = "linux")]
     let directory = std::env::var_os("XDG_RUNTIME_DIR")
         .map(std::path::PathBuf::from)
         .or_else(|| {
@@ -846,13 +906,29 @@ fn acquire_instance_lock() -> std::io::Result<Option<std::fs::File>> {
         })
         .ok_or_else(|| std::io::Error::other("XDG_RUNTIME_DIR and HOME are unavailable"))?
         .join("gamepad-desktop");
+
+    #[cfg(target_os = "windows")]
+    let directory = std::env::var_os("LOCALAPPDATA")
+        .map(std::path::PathBuf::from)
+        .or_else(|| {
+            std::env::var_os("USERPROFILE")
+                .map(|home| std::path::PathBuf::from(home).join("AppData").join("Local"))
+        })
+        .ok_or_else(|| std::io::Error::other("LOCALAPPDATA and USERPROFILE are unavailable"))?
+        .join("gamepad-desktop");
+
     std::fs::create_dir_all(&directory)?;
+    acquire_instance_lock_at(&directory.join("desktop.lock"))
+}
+
+#[cfg(any(target_os = "linux", target_os = "windows"))]
+fn acquire_instance_lock_at(path: &std::path::Path) -> std::io::Result<Option<std::fs::File>> {
     let lock = std::fs::OpenOptions::new()
         .create(true)
         .truncate(false)
         .read(true)
         .write(true)
-        .open(directory.join("desktop.lock"))?;
+        .open(path)?;
     match lock.try_lock() {
         Ok(()) => Ok(Some(lock)),
         Err(std::fs::TryLockError::WouldBlock) => Ok(None),
@@ -862,7 +938,7 @@ fn acquire_instance_lock() -> std::io::Result<Option<std::fs::File>> {
 
 fn main() -> eframe::Result {
     let background_start = std::env::args_os().any(|argument| argument == "--background");
-    #[cfg(target_os = "linux")]
+    #[cfg(any(target_os = "linux", target_os = "windows"))]
     let _instance_lock = match acquire_instance_lock() {
         Ok(Some(lock)) => lock,
         Ok(None) => return Ok(()),
@@ -879,8 +955,16 @@ fn main() -> eframe::Result {
     let tray = tray_result.map(|(icon, _)| icon);
     loop {
         let options = eframe::NativeOptions {
-            viewport: main_viewport_builder(cfg!(target_os = "windows"))
-                .with_visible(!background_start || tray.is_err()),
+            viewport: main_viewport_builder(cfg!(target_os = "windows")).with_visible(
+                !background_start
+                    || tray.is_err()
+                    || desktop
+                        .lock()
+                        .expect("desktop runtime lock")
+                        .state()
+                        .onboarding
+                        .is_some(),
+            ),
             run_and_return: true,
             ..Default::default()
         };
@@ -918,6 +1002,30 @@ fn main() -> eframe::Result {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[cfg(any(target_os = "linux", target_os = "windows"))]
+    #[test]
+    fn only_one_desktop_instance_can_hold_the_lock() {
+        let unique = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let directory = std::env::temp_dir().join(format!(
+            "gamepad-desktop-lock-{}-{unique}",
+            std::process::id()
+        ));
+        std::fs::create_dir_all(&directory).unwrap();
+        let path = directory.join("desktop.lock");
+
+        let first = acquire_instance_lock_at(&path)
+            .unwrap()
+            .expect("first instance should acquire the lock");
+        assert!(acquire_instance_lock_at(&path).unwrap().is_none());
+        drop(first);
+        assert!(acquire_instance_lock_at(&path).unwrap().is_some());
+
+        let _ = std::fs::remove_dir_all(directory);
+    }
 
     #[cfg(target_os = "windows")]
     #[test]

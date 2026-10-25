@@ -4,6 +4,7 @@ pub mod gamepads;
 pub mod i18n;
 pub mod keyboard;
 pub(crate) mod notifications;
+pub mod onboarding;
 pub mod placement;
 pub mod preferences;
 pub mod runtime;

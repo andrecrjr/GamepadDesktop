@@ -1,6 +1,6 @@
 :root {
   color-scheme: dark;
-  font-family: "Segoe UI", system-ui, sans-serif;
+  font-family: 'Segoe UI', system-ui, sans-serif;
   color: #f4f7ff;
   background: #080b16;
   font-synthesis: none;
@@ -81,6 +81,9 @@ summary:focus-visible {
 
 .brand,
 .footer-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 11px;
   color: #e9f2ff;
   font-size: 12px;
   font-weight: 700;
@@ -153,7 +156,7 @@ p {
 h1,
 h2,
 h3 {
-  font-family: "Segoe UI", system-ui, sans-serif;
+  font-family: 'Segoe UI', system-ui, sans-serif;
   letter-spacing: -0.04em;
 }
 
