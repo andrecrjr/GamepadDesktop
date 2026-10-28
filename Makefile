@@ -9,6 +9,7 @@ WINDOWS_TARGET ?= x86_64-pc-windows-gnu
 MINGW_BIN ?= $$HOME/.local/share/gamepad-navigator/toolchains/mingw/usr/bin
 DESKTOP_DIST_DIR := desktop/dist
 WINDOWS_BINARY := desktop/target/$(WINDOWS_TARGET)/release/gamepad-desktop.exe
+WINDOWS_RELEASE_BINARY := $(DESKTOP_DIST_DIR)/GamepadDesktop-Windows-x64.exe
 WINDOWS_PACKAGE := $(DESKTOP_DIST_DIR)/GamepadDesktop-Windows-x64.zip
 LINUX_BINARY := desktop/target/$(LINUX_TARGET)/release/gamepad-desktop
 LINUX_PACKAGE := $(DESKTOP_DIST_DIR)/GamepadDesktop-Linux-x64.tar.gz
@@ -103,6 +104,7 @@ desktop-linux-package: desktop-clean-dist desktop-linux
 desktop-windows: desktop-clean-dist
 	PATH="$(if $(MINGW_BIN),$(MINGW_BIN):)$$PATH" $(CARGO) build --manifest-path $(DESKTOP_MANIFEST) --release --target $(WINDOWS_TARGET)
 	mkdir -p $(DESKTOP_DIST_DIR)
+	cp $(WINDOWS_BINARY) $(WINDOWS_RELEASE_BINARY)
 	$(ZIP) -q -j -FS $(WINDOWS_PACKAGE) $(WINDOWS_BINARY)
 	rm -f $(DESKTOP_DIST_DIR)/gamepad-desktop.exe
 
@@ -110,6 +112,7 @@ desktop-clean-dist:
 	mkdir -p $(DESKTOP_DIST_DIR)
 	find $(DESKTOP_DIST_DIR) -mindepth 1 -maxdepth 1 \
 		! -name .stfolder \
+		! -name $(notdir $(WINDOWS_RELEASE_BINARY)) \
 		! -name $(notdir $(WINDOWS_PACKAGE)) \
 		! -name $(notdir $(LINUX_PACKAGE)) \
 		-exec rm -rf -- {} +

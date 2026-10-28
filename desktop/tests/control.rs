@@ -72,6 +72,19 @@ fn swapped_stick_bindings_open_keyboard_and_launcher() {
 }
 
 #[test]
+fn dpad_moves_pointer_when_system_keyboard_does_not_use_gamepad_focus() {
+    let (mut controller, mut settings) = ready();
+    controller.set_system_keyboard_uses_gamepad(false);
+    controller.update(Some(&pressed(Button::RightStick)), TICK, &mut settings);
+    controller.update(Some(&GamepadFrame::default()), TICK, &mut settings);
+
+    assert_eq!(
+        controller.update(Some(&pressed(Button::Right)), TICK, &mut settings),
+        vec![Action::Dpad(DpadDirection::Right)]
+    );
+}
+
+#[test]
 fn swapped_keyboard_shortcuts_keep_space_separate_from_close() {
     use gamepad_desktop::control::KeyboardInput;
     let (mut controller, mut settings) = ready();
@@ -328,8 +341,9 @@ fn r3_opens_system_keyboard_without_disabling_mouse_control() {
 
     assert!(controller.keyboard.open);
     assert!(actions.contains(&Action::OnScreenKeyboard(true)));
+    assert!(settings.enabled);
     assert!(
-        actions
+        !actions
             .iter()
             .any(|action| matches!(action, Action::Move(_, _)))
     );
@@ -433,9 +447,177 @@ fn r3_cannot_open_keyboard_when_paused_or_connecting_with_it_held() {
 }
 
 #[test]
+fn game_mode_can_operate_keyboard_and_stop_pointer_after_closing() {
+    use gamepad_desktop::control::ControlMode;
+
+    for keyboard_uses_gamepad in [false, true] {
+        let mut controller = MouseController::default();
+        controller.set_system_keyboard_uses_gamepad(keyboard_uses_gamepad);
+        let mut settings = ControlSettings {
+            mode: ControlMode::Game,
+            ..Default::default()
+        };
+        let neutral = GamepadFrame::default();
+        controller.update(Some(&neutral), TICK, &mut settings);
+        controller.update(Some(&neutral), TICK, &mut settings);
+        assert_eq!(
+            controller.update(Some(&pressed(Button::RightStick)), TICK, &mut settings),
+            vec![Action::OnScreenKeyboard(true)]
+        );
+        assert!(controller.keyboard.open);
+        assert!(
+            controller
+                .update(Some(&pressed(Button::RightStick)), TICK, &mut settings)
+                .is_empty()
+        );
+        controller.update(Some(&neutral), TICK, &mut settings);
+        let navigation = GamepadFrame {
+            x: 0.8,
+            scroll: 0.8,
+            ..pressed(Button::Right)
+        };
+        for _ in 0..50 {
+            let actions = controller.update(Some(&navigation), TICK, &mut settings);
+            if keyboard_uses_gamepad {
+                assert!(actions.is_empty());
+            } else {
+                assert!(
+                    actions
+                        .iter()
+                        .any(|action| matches!(action, Action::Move(x, 0) if *x > 0))
+                );
+                assert!(
+                    actions
+                        .iter()
+                        .all(|action| matches!(action, Action::Move(_, _) | Action::Dpad(_)))
+                );
+            }
+            assert!(controller.keyboard.open);
+        }
+        controller.update(Some(&neutral), TICK, &mut settings);
+        assert_eq!(
+            controller.update(Some(&pressed(Button::RightStick)), TICK, &mut settings),
+            vec![Action::OnScreenKeyboard(false)]
+        );
+        assert_eq!(settings.mode, ControlMode::Game);
+        assert!(
+            controller
+                .update(
+                    Some(&GamepadFrame {
+                        x: 1.0,
+                        ..pressed(Button::South)
+                    }),
+                    TICK,
+                    &mut settings
+                )
+                .is_empty()
+        );
+    }
+}
+
+#[test]
+fn game_keyboard_is_available_even_when_desktop_controls_were_paused() {
+    use gamepad_desktop::control::ControlMode;
+
+    let mut controller = MouseController::default();
+    let mut settings = ControlSettings {
+        enabled: false,
+        mode: ControlMode::Game,
+        ..Default::default()
+    };
+    let neutral = GamepadFrame::default();
+    controller.update(Some(&neutral), TICK, &mut settings);
+    controller.update(Some(&neutral), TICK, &mut settings);
+    assert_eq!(
+        controller.update(Some(&pressed(Button::RightStick)), TICK, &mut settings),
+        vec![Action::OnScreenKeyboard(true)]
+    );
+    assert!(controller.keyboard.open);
+    assert!(!settings.enabled);
+}
+
+#[test]
+fn native_keyboard_allows_only_pointer_and_left_click_in_both_modes() {
+    use gamepad_desktop::control::ControlMode;
+
+    for mode in [ControlMode::Desktop, ControlMode::Game] {
+        let mut controller = MouseController::default();
+        let mut settings = ControlSettings {
+            mode,
+            ..Default::default()
+        };
+        let neutral = GamepadFrame::default();
+        controller.update(Some(&neutral), TICK, &mut settings);
+        controller.update(Some(&neutral), TICK, &mut settings);
+        controller.update(Some(&pressed(Button::RightStick)), TICK, &mut settings);
+        controller.update(Some(&neutral), TICK, &mut settings);
+        for button in [
+            Button::South,
+            Button::East,
+            Button::West,
+            Button::North,
+            Button::Up,
+            Button::Down,
+            Button::Left,
+            Button::Right,
+            Button::LeftShoulder,
+            Button::RightShoulder,
+            Button::LeftStick,
+            Button::Start,
+            Button::Select,
+        ] {
+            let frame = GamepadFrame {
+                x: 1.0,
+                y: 1.0,
+                scroll: 1.0,
+                ..pressed(button)
+            };
+            let actions = controller.update(Some(&frame), TICK, &mut settings);
+            assert!(
+                actions
+                    .iter()
+                    .any(|action| matches!(action, Action::Move(x, y) if *x > 0 && *y > 0))
+            );
+            assert!(
+                actions.iter().all(|action| matches!(
+                    action,
+                    Action::Move(_, _) | Action::Mouse(MouseButton::Left, true) | Action::Dpad(_)
+                )),
+                "native keyboard leaked {button:?}: {actions:?}"
+            );
+            assert_eq!(
+                actions
+                    .iter()
+                    .any(|action| matches!(action, Action::Dpad(_))),
+                matches!(
+                    button,
+                    Button::Up | Button::Down | Button::Left | Button::Right
+                )
+            );
+            assert_eq!(
+                actions.contains(&Action::Mouse(MouseButton::Left, true)),
+                matches!(button, Button::South)
+            );
+            let released = controller.update(Some(&neutral), TICK, &mut settings);
+            assert_eq!(
+                released,
+                if matches!(button, Button::South) {
+                    vec![Action::Mouse(MouseButton::Left, false)]
+                } else {
+                    vec![]
+                }
+            );
+            assert!(controller.keyboard.open);
+        }
+        assert_eq!(settings.mode, mode);
+    }
+}
+
+#[test]
 fn keyboard_navigation_honors_repeat_delay_at_different_poll_rates() {
     for tick_ms in [8, 20] {
         let (mut controller, mut settings) = ready();
+        controller.keyboard.settings.repeat_delay_ms = 600;
         controller.set_system_keyboard_uses_gamepad(true);
         controller.update(Some(&pressed(Button::RightStick)), TICK, &mut settings);
         controller.update(Some(&GamepadFrame::default()), TICK, &mut settings);
@@ -502,6 +684,8 @@ fn keyboard_repeat_can_be_disabled_without_disabling_single_presses() {
 fn keyboard_repeat_uses_the_configured_delay_and_interval() {
     for tick_ms in [8, 20] {
         let (mut controller, mut settings) = ready();
+        controller.keyboard.settings.repeat_delay_ms = 600;
+        controller.keyboard.settings.repeat_interval_ms = 400;
         controller.set_system_keyboard_uses_gamepad(true);
         controller.update(Some(&pressed(Button::RightStick)), TICK, &mut settings);
         controller.update(Some(&GamepadFrame::default()), TICK, &mut settings);

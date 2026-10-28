@@ -9,7 +9,11 @@ const SELECT_DOUBLE_TAP_WINDOW: Duration = Duration::from_millis(400);
 pub const MOUSE_SHORTCUTS: &[(&str, &str)] = &[
     (
         "R3 · pressionar analógico direito",
-        "Abrir / fechar teclado visual próprio",
+        if cfg!(target_os = "windows") {
+            "Abrir / fechar teclado do Windows"
+        } else {
+            "Abrir / fechar teclado visual próprio"
+        },
     ),
     (
         "L3 · pressionar analógico esquerdo",
@@ -30,7 +34,14 @@ pub const MOUSE_SHORTCUTS: &[(&str, &str)] = &[
         "Superior · Y / △ / X no Switch",
         "Escape · fechar menu / cancelar",
     ),
-    ("Direcional", "Setas · segurar para repetir"),
+    (
+        "Direcional",
+        if cfg!(target_os = "windows") {
+            "Mover a seleção pelo teclado"
+        } else {
+            "Setas · segurar para repetir"
+        },
+    ),
     ("LB / L1", "Tab · próximo campo"),
     ("RB / R1", "Alt+Tab · alternar janela"),
     (
@@ -225,6 +236,10 @@ impl Default for MouseController {
 }
 
 impl MouseController {
+    pub(crate) fn require_neutral(&mut self) {
+        self.armed = false;
+    }
+
     pub fn set_system_keyboard_uses_gamepad(&mut self, enabled: bool) {
         self.system_keyboard_uses_gamepad = enabled;
     }
@@ -266,12 +281,11 @@ impl MouseController {
         let pause_chord = frame.pressed(Button::Start) && frame.pressed(Button::Select);
         let previous_pause_chord =
             self.previous.pressed(Button::Start) && self.previous.pressed(Button::Select);
-        let keyboard_uses_gamepad = self.keyboard.open && self.system_keyboard_uses_gamepad;
         if pause_chord {
             self.select_tap_remaining = None;
         }
         if settings.mode == ControlMode::Desktop
-            && !keyboard_uses_gamepad
+            && !(self.keyboard.open && self.system_keyboard_uses_gamepad)
             && pause_chord
             && !previous_pause_chord
         {
@@ -280,7 +294,7 @@ impl MouseController {
         }
         let select_pressed =
             frame.pressed(Button::Select) && !self.previous.pressed(Button::Select);
-        if !keyboard_uses_gamepad && !pause_chord && select_pressed {
+        if !self.keyboard.open && !pause_chord && select_pressed {
             if self.select_tap_remaining.is_some() {
                 settings.mode = settings.mode.toggled();
                 self.mode = settings.mode;
@@ -293,19 +307,13 @@ impl MouseController {
             }
             self.select_tap_remaining = Some(SELECT_DOUBLE_TAP_WINDOW);
         }
-        if settings.mode == ControlMode::Game {
-            self.close_keyboard(&mut actions);
-            self.release(&mut actions);
-            self.armed = false;
-            self.previous = *frame;
-            return actions;
-        }
-        if !settings.enabled || !self.armed {
-            if !settings.enabled {
+        let input_enabled = settings.mode == ControlMode::Game || settings.enabled;
+        if !input_enabled || !self.armed {
+            if !input_enabled {
                 self.close_keyboard(&mut actions);
             }
             self.release(&mut actions);
-            self.armed = settings.enabled
+            self.armed = input_enabled
                 && !frame.buttons.iter().any(|pressed| *pressed)
                 && [frame.x, frame.y, frame.scroll]
                     .iter()
@@ -319,11 +327,49 @@ impl MouseController {
         if keyboard_toggled {
             actions.push(self.toggle_keyboard());
             self.release(&mut actions);
+            if !self.keyboard.open {
+                self.require_neutral();
+            }
             self.previous = *frame;
+            return actions;
         }
-        if keyboard_uses_gamepad && !keyboard_toggled {
-            self.release_mouse(&mut actions);
-            self.update_keyboard(frame, elapsed, settings.deadzone, &mut actions);
+        if self.keyboard.open {
+            if self.system_keyboard_uses_gamepad {
+                self.release_mouse(&mut actions);
+                self.update_keyboard(frame, elapsed, settings.deadzone, &mut actions);
+            } else {
+                self.move_pointer(frame, elapsed, settings, &mut actions);
+                for (index, (button, direction)) in [
+                    (Button::Up, DpadDirection::Up),
+                    (Button::Down, DpadDirection::Down),
+                    (Button::Left, DpadDirection::Left),
+                    (Button::Right, DpadDirection::Right),
+                ]
+                .into_iter()
+                .enumerate()
+                {
+                    if self.repeat_direction(
+                        frame.pressed(button),
+                        self.previous.pressed(button),
+                        index,
+                        elapsed,
+                        REPEAT_INITIAL_DELAY,
+                        DIRECTION_REPEAT_INTERVAL,
+                    ) {
+                        actions.push(Action::Dpad(direction));
+                    }
+                }
+                let pressed = frame.pressed(Button::South);
+                if pressed != self.held[0] {
+                    actions.push(Action::Mouse(MouseButton::Left, pressed));
+                    self.held[0] = pressed;
+                }
+            }
+            self.previous = *frame;
+            return actions;
+        }
+        if settings.mode == ControlMode::Game {
+            self.release(&mut actions);
             self.previous = *frame;
             return actions;
         }
@@ -336,7 +382,7 @@ impl MouseController {
         .enumerate()
         {
             let pressed = frame.pressed(button);
-            if !keyboard_toggled && pressed != self.held[index] {
+            if pressed != self.held[index] {
                 actions.push(Action::Mouse(mouse, pressed));
                 self.held[index] = pressed;
             }
@@ -348,7 +394,7 @@ impl MouseController {
             (Button::LeftShoulder, Action::Key(SystemKey::Tab)),
             (Button::RightShoulder, Action::NextWindow),
         ] {
-            if !keyboard_toggled && frame.pressed(button) && !self.previous.pressed(button) {
+            if frame.pressed(button) && !self.previous.pressed(button) {
                 actions.push(action);
             }
         }
@@ -362,16 +408,14 @@ impl MouseController {
         .into_iter()
         .enumerate()
         {
-            if !keyboard_toggled
-                && self.repeat_direction(
-                    frame.pressed(button),
-                    self.previous.pressed(button),
-                    index,
-                    elapsed,
-                    REPEAT_INITIAL_DELAY,
-                    DIRECTION_REPEAT_INTERVAL,
-                )
-            {
+            if self.repeat_direction(
+                frame.pressed(button),
+                self.previous.pressed(button),
+                index,
+                elapsed,
+                REPEAT_INITIAL_DELAY,
+                DIRECTION_REPEAT_INTERVAL,
+            ) {
                 actions.push(Action::Dpad(direction));
                 self.dpad_routing_held = true;
             }
@@ -384,15 +428,7 @@ impl MouseController {
             actions.push(Action::DpadReleased);
             self.dpad_routing_held = false;
         }
-        let x = axis_value(frame.x, settings.deadzone);
-        let y = axis_value(frame.y, settings.deadzone);
-        let magnitude = x.hypot(y).max(1.0);
-        let speed = settings.speed.clamp(100.0, 2400.0);
-        let dx = accumulate(&mut self.remainder[0], x / magnitude * speed * seconds);
-        let dy = accumulate(&mut self.remainder[1], y / magnitude * speed * seconds);
-        if dx != 0 || dy != 0 {
-            actions.push(Action::Move(dx, dy));
-        }
+        self.move_pointer(frame, elapsed, settings, &mut actions);
         let scroll = accumulate(
             &mut self.remainder[2],
             axis_value(frame.scroll, settings.deadzone) * 10.0 * seconds,
@@ -402,6 +438,25 @@ impl MouseController {
         }
         self.previous = *frame;
         actions
+    }
+
+    fn move_pointer(
+        &mut self,
+        frame: &GamepadFrame,
+        elapsed: Duration,
+        settings: &ControlSettings,
+        actions: &mut Vec<Action>,
+    ) {
+        let seconds = elapsed.as_secs_f64().min(0.05);
+        let x = axis_value(frame.x, settings.deadzone);
+        let y = axis_value(frame.y, settings.deadzone);
+        let magnitude = x.hypot(y).max(1.0);
+        let speed = settings.speed.clamp(100.0, 2400.0);
+        let dx = accumulate(&mut self.remainder[0], x / magnitude * speed * seconds);
+        let dy = accumulate(&mut self.remainder[1], y / magnitude * speed * seconds);
+        if dx != 0 || dy != 0 {
+            actions.push(Action::Move(dx, dy));
+        }
     }
 
     fn release(&mut self, actions: &mut Vec<Action>) {

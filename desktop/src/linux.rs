@@ -84,7 +84,7 @@ impl Platform {
         Ok(())
     }
 
-    pub fn update_keyboard_overlay(&mut self, session: &KeyboardSession) -> Result<(), String> {
+    pub fn update_keyboard_overlay(&mut self, session: &mut KeyboardSession) -> Result<(), String> {
         let Some(overlay) = &mut self.keyboard_overlay else {
             return Ok(());
         };

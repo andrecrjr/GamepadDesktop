@@ -4,34 +4,42 @@ use enigo::{Axis as ScrollAxis, Coordinate, Direction, Enigo, Key, Keyboard, Mou
 
 use crate::control::{Action, DpadDirection, KeyboardInput, MouseButton, SystemKey};
 use crate::keyboard::{KeyboardModifiers, KeyboardPresentation, KeyboardSession};
+use crate::windows_gamepad_hook::GamepadNavigationHook;
 use crate::windows_navigation::{
-    NativeDpadRouting, NativeDpadTargetCache, PausedCursor, is_native_windows_target,
+    NativeDpadRouting, NativeDpadTargetCache, PausedCursor, filter_desktop_action,
+    is_native_windows_target, is_touch_keyboard_process, resolve_native_target,
     resolve_native_windows,
 };
+use crate::windows_touch_keyboard::WindowsTouchKeyboard;
 use windows::{
     Win32::{
-        Foundation::{CloseHandle, HWND},
+        Foundation::{CloseHandle, HWND, LPARAM, POINT},
         System::Threading::{
-            OpenProcess, PROCESS_NAME_WIN32, PROCESS_QUERY_LIMITED_INFORMATION,
+            IsImmersiveProcess, OpenProcess, PROCESS_NAME_WIN32, PROCESS_QUERY_LIMITED_INFORMATION,
             QueryFullProcessImageNameW,
         },
         UI::WindowsAndMessaging::{
-            CreateCursor, GA_ROOT, GUITHREADINFO, GetAncestor, GetClassNameW, GetForegroundWindow,
-            GetGUIThreadInfo, GetWindowThreadProcessId, OCR_APPSTARTING, OCR_CROSS, OCR_HAND,
-            OCR_HELP, OCR_IBEAM, OCR_NO, OCR_NORMAL, OCR_SIZEALL, OCR_SIZENESW, OCR_SIZENS,
-            OCR_SIZENWSE, OCR_SIZEWE, OCR_UP, OCR_WAIT, SPI_SETCURSORS,
-            SYSTEM_PARAMETERS_INFO_UPDATE_FLAGS, SetSystemCursor, SystemParametersInfoW,
+            CreateCursor, EnumChildWindows, GA_ROOT, GUITHREADINFO, GetAncestor, GetClassNameW,
+            GetForegroundWindow, GetGUIThreadInfo, GetPhysicalCursorPos, GetWindowThreadProcessId,
+            IsWindowVisible, OCR_APPSTARTING, OCR_CROSS, OCR_HAND, OCR_HELP, OCR_IBEAM, OCR_NO,
+            OCR_NORMAL, OCR_SIZEALL, OCR_SIZENESW, OCR_SIZENS, OCR_SIZENWSE, OCR_SIZEWE, OCR_UP,
+            OCR_WAIT, SPI_SETCURSORS, SYSTEM_PARAMETERS_INFO_UPDATE_FLAGS, SetPhysicalCursorPos,
+            SetSystemCursor, SystemParametersInfoW, WindowFromPhysicalPoint,
         },
     },
-    core::PWSTR,
+    core::{BOOL, PWSTR},
 };
 
 const NAVIGATION_TARGET_CHECK_INTERVAL: Duration = Duration::from_millis(50);
 
 pub struct Platform {
     input: Enigo,
+    navigation_hook: GamepadNavigationHook,
+    touch_keyboard: WindowsTouchKeyboard,
+    desktop_controls_active: bool,
+    controller_connected: bool,
     native_dpad: NativeDpadRouting,
-    target_cache: [NativeDpadTargetCache; 3],
+    target_cache: [NativeDpadTargetCache; 4],
     paused_cursor: PausedCursor,
     last_target_check: Option<Instant>,
 }
@@ -41,6 +49,12 @@ impl Platform {
         Ok(Self {
             input: Enigo::new(&Settings::default())
                 .map_err(|error| format!("Falha ao conectar entrada do Windows: {error}"))?,
+            navigation_hook: GamepadNavigationHook::new().map_err(|error| {
+                format!("Falha filtrando navegação do gamepad no Windows: {error}")
+            })?,
+            touch_keyboard: WindowsTouchKeyboard::default(),
+            desktop_controls_active: false,
+            controller_connected: false,
             native_dpad: NativeDpadRouting::default(),
             target_cache: Default::default(),
             paused_cursor: PausedCursor::default(),
@@ -49,7 +63,9 @@ impl Platform {
     }
 
     pub(crate) fn update_native_dpad_target(&mut self) {
-        self.refresh_native_dpad_target(false);
+        if !self.navigation_hook.is_active() {
+            self.refresh_native_dpad_target(false);
+        }
     }
 
     pub(crate) fn update_mouse_mode(
@@ -57,25 +73,55 @@ impl Platform {
         enabled: bool,
         connected: bool,
     ) -> Result<(), String> {
+        self.desktop_controls_active = enabled && connected;
+        self.controller_connected = connected;
+        self.navigation_hook.set_active(
+            self.desktop_controls_active && !self.touch_keyboard.uses_native_gamepad(),
+        )?;
         self.paused_cursor
-            .sync(enabled, connected, set_cursor_hidden)
+            .sync(
+                enabled || self.touch_keyboard.visible(),
+                connected,
+                set_cursor_hidden,
+            )
             .map_err(|error| format!("Falha atualizando cursor do Windows: {error}"))
     }
 
     pub fn system_keyboard_uses_gamepad(&self) -> bool {
-        true
+        false
     }
 
     pub fn keyboard_presentation(&self) -> KeyboardPresentation {
-        KeyboardPresentation::Viewport
+        KeyboardPresentation::System
     }
 
     pub fn keyboard_overlay_error(&self) -> Option<&str> {
         None
     }
 
-    pub fn update_keyboard_overlay(&mut self, _: &KeyboardSession) -> Result<(), String> {
-        Ok(())
+    pub fn update_keyboard_overlay(&mut self, session: &mut KeyboardSession) -> Result<(), String> {
+        let was_visible = self.touch_keyboard.visible();
+        let result = self.touch_keyboard.update(session);
+        if self.controller_connected
+            && !was_visible
+            && self.touch_keyboard.visible()
+            && !self.touch_keyboard.uses_native_gamepad()
+            && let Some(bounds) = self.touch_keyboard.bounds
+        {
+            let (x, y) = bounds.center();
+            unsafe { SetPhysicalCursorPos(x, y) }.map_err(|error| error.to_string())?;
+        }
+        self.navigation_hook.set_active(
+            self.desktop_controls_active && !self.touch_keyboard.uses_native_gamepad(),
+        )?;
+        self.paused_cursor
+            .sync(
+                self.desktop_controls_active || self.touch_keyboard.visible(),
+                self.controller_connected,
+                set_cursor_hidden,
+            )
+            .map_err(|error| error.to_string())?;
+        result
     }
 
     fn refresh_native_dpad_target(&mut self, force: bool) {
@@ -107,6 +153,43 @@ impl Platform {
     }
 
     pub fn apply(&mut self, action: Action) -> Result<(), String> {
+        if self.touch_keyboard.active()
+            && self.touch_keyboard.gamepad_session_active()
+            && !self.touch_keyboard.uses_native_gamepad()
+            && let Action::Dpad(direction) = action
+        {
+            if let Some(bounds) = self.touch_keyboard.bounds {
+                let mut cursor = POINT::default();
+                unsafe { GetPhysicalCursorPos(&mut cursor) }.map_err(|error| error.to_string())?;
+                let (x, y) = bounds.move_cursor_by_key(cursor.x, cursor.y, direction);
+                unsafe { SetPhysicalCursorPos(x, y) }.map_err(|error| error.to_string())?;
+            }
+            return Ok(());
+        }
+        let Some(action) = filter_desktop_action(
+            action,
+            self.navigation_hook.is_active(),
+            self.touch_keyboard.uses_native_gamepad(),
+        ) else {
+            return Ok(());
+        };
+        if self.touch_keyboard.active() {
+            match action {
+                Action::Move(dx, dy) => {
+                    if let Some(bounds) = self.touch_keyboard.bounds {
+                        let mut cursor = POINT::default();
+                        unsafe { GetPhysicalCursorPos(&mut cursor) }
+                            .map_err(|error| error.to_string())?;
+                        let (x, y) = bounds.constrain(cursor.x, cursor.y, dx, dy);
+                        unsafe { SetPhysicalCursorPos(x, y) }.map_err(|error| error.to_string())?;
+                    }
+                    return Ok(());
+                }
+                Action::Mouse(MouseButton::Left, true) if self.keyboard_click_target() => {}
+                Action::Mouse(_, false) | Action::DpadReleased => {}
+                _ => return Ok(()),
+            }
+        }
         let result = match action {
             Action::OnScreenKeyboard(_) => return Ok(()),
             Action::Dpad(direction) => {
@@ -172,6 +255,44 @@ impl Platform {
         result.map_err(|error| format!("Falha enviando entrada ao Windows: {error}"))
     }
 
+    fn keyboard_click_target(&self) -> bool {
+        let mut cursor = POINT::default();
+        if unsafe { GetPhysicalCursorPos(&mut cursor) }.is_err()
+            || !self
+                .touch_keyboard
+                .bounds
+                .is_some_and(|bounds| bounds.contains(cursor.x, cursor.y))
+        {
+            return false;
+        }
+        let window = unsafe { WindowFromPhysicalPoint(cursor) };
+        let mut process_id = 0;
+        unsafe { GetWindowThreadProcessId(window, Some(&mut process_id)) };
+        let Ok(process) =
+            (unsafe { OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, process_id) })
+        else {
+            return false;
+        };
+        let mut path = [0_u16; 32_768];
+        let mut length = path.len() as u32;
+        let queried = unsafe {
+            QueryFullProcessImageNameW(
+                process,
+                PROCESS_NAME_WIN32,
+                PWSTR(path.as_mut_ptr()),
+                &mut length,
+            )
+        };
+        let _ = unsafe { CloseHandle(process) };
+        if queried.is_err() {
+            return false;
+        }
+        let path = String::from_utf16_lossy(&path[..length as usize]);
+        ["WINDIR", "CommonProgramFiles"].into_iter().any(|name| {
+            std::env::var(name).is_ok_and(|directory| is_touch_keyboard_process(&path, &directory))
+        })
+    }
+
     fn emit_keyboard_input(
         &mut self,
         input: KeyboardInput,
@@ -232,30 +353,35 @@ impl Platform {
 
         let process =
             unsafe { OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, process_id).ok()? };
-        let mut path = [0_u16; 32_768];
-        let mut length = path.len() as u32;
-        let result = unsafe {
-            QueryFullProcessImageNameW(
-                process,
-                PROCESS_NAME_WIN32,
-                PWSTR(path.as_mut_ptr()),
-                &mut length,
-            )
-        };
+        // A positive API result is sufficient; a negative result or error uses
+        // the known shell/app rules. Neither package identity nor path is required
+        // for the automatic branch.
+        let native = resolve_native_target(unsafe { IsImmersiveProcess(process).is_ok() }, || {
+            let mut path = [0_u16; 32_768];
+            let mut length = path.len() as u32;
+            unsafe {
+                QueryFullProcessImageNameW(
+                    process,
+                    PROCESS_NAME_WIN32,
+                    PWSTR(path.as_mut_ptr()),
+                    &mut length,
+                )
+                .ok()?;
+            }
+            let windows_directory = std::env::var("WINDIR").ok()?;
+            let class = Self::window_class(window);
+            if class.is_empty() {
+                return None;
+            }
+            let image_path = String::from_utf16_lossy(&path[..length as usize]);
+            Some(is_native_windows_target(
+                &image_path,
+                &windows_directory,
+                &class,
+            ))
+        });
         let _ = unsafe { CloseHandle(process) };
-        result.ok()?;
-
-        let windows_directory = std::env::var("WINDIR").ok()?;
-        let class = Self::window_class(window);
-        if class.is_empty() {
-            return None;
-        }
-        let image_path = String::from_utf16_lossy(&path[..length as usize]);
-        Some(is_native_windows_target(
-            &image_path,
-            &windows_directory,
-            &class,
-        ))
+        native
     }
 
     fn window_class(window: HWND) -> String {
@@ -267,7 +393,34 @@ impl Platform {
         String::from_utf16_lossy(&name[..length as usize])
     }
 
-    fn navigation_windows() -> Option<[HWND; 3]> {
+    fn hosted_content_window(frame: HWND) -> Option<HWND> {
+        if !Self::window_class(frame).eq_ignore_ascii_case("ApplicationFrameWindow") {
+            return None;
+        }
+
+        unsafe extern "system" fn find_content(window: HWND, parameter: LPARAM) -> BOOL {
+            if unsafe { IsWindowVisible(window) }.as_bool()
+                && Platform::window_class(window).eq_ignore_ascii_case("Windows.UI.Core.CoreWindow")
+            {
+                // EnumChildWindows invokes this synchronously while `content` is alive.
+                unsafe { *(parameter.0 as *mut HWND) = window };
+                return false.into();
+            }
+            true.into()
+        }
+
+        let mut content = HWND::default();
+        unsafe {
+            let _ = EnumChildWindows(
+                Some(frame),
+                Some(find_content),
+                LPARAM((&mut content as *mut HWND) as isize),
+            );
+        }
+        (!content.is_invalid()).then_some(content)
+    }
+
+    fn navigation_windows() -> Option<[HWND; 4]> {
         unsafe {
             let foreground = GetForegroundWindow();
             if foreground.is_invalid() {
@@ -284,11 +437,12 @@ impl Platform {
                 .filter(|window| !window.is_invalid())
                 .unwrap_or(foreground);
             let root = GetAncestor(focus, GA_ROOT);
-            Some([
-                foreground,
-                focus,
-                if root.is_invalid() { foreground } else { root },
-            ])
+            let root = if root.is_invalid() { foreground } else { root };
+            let content = [foreground, root]
+                .into_iter()
+                .find_map(Self::hosted_content_window)
+                .unwrap_or_default();
+            Some([content, focus, foreground, root])
         }
     }
 }

@@ -2,7 +2,7 @@
 
 Use o controle para navegar pelo computador, mover o ponteiro e digitar sem tirar o foco do aplicativo que você está usando.
 
-O app controla o ponteiro e envia comandos de teclado, além de oferecer um teclado visual próprio. Ele continua funcionando quando o painel é recolhido para a bandeja do sistema.
+O app controla o ponteiro e envia comandos de teclado. No Windows, R3 abre o teclado de toque do próprio sistema; no Linux, abre o teclado visual do app. Ele continua funcionando quando o painel é recolhido para a bandeja do sistema.
 
 Notificações do sistema avisam sobre pausa e retomada, conexão do controle e falhas mesmo com o painel recolhido. No Windows, a primeira execução cria o atalho por usuário “Gamepad Desktop” no menu Iniciar para identificar os avisos.
 
@@ -12,7 +12,7 @@ Notificações do sistema avisam sobre pausa e retomada, conexão do controle e 
 
 ## Começar
 
-No Windows, baixe e extraia o [pacote x64](dist/GamepadDesktop-Windows-x64.zip), conecte o controle e abra `gamepad-desktop.exe`. O painel mostra quando o controle foi reconhecido e quais comandos estão disponíveis.
+No Windows, baixe e extraia o [pacote x64](dist/GamepadDesktop-Windows-x64.zip), conecte o controle e abra `gamepad-desktop.exe`. O painel mostra quando o controle foi reconhecido e quais comandos estão disponíveis. Use **Buscar atualizações**, no rodapé do painel, para instalar a versão mais recente e reiniciar o app.
 
 No Linux, baixe e extraia o [pacote x64](dist/GamepadDesktop-Linux-x64.tar.gz). As instruções para executar o app e as permissões necessárias estão no [guia do sistema](docs/system-overview.md#como-iniciar-no-linux).
 
@@ -39,7 +39,7 @@ Configurações de versões anteriores continuam válidas e recebem o roteiro um
 | ------------------------------------ | ------------------------------------------------------------ |
 | Analógico esquerdo                   | Mover o ponteiro                                             |
 | Analógico direito, cima/baixo        | Rolar a página                                               |
-| Direcional                           | Enviar setas; segurar para repetir                           |
+| Direcional                           | Navegação no teclado aberto; fora dele, setas somente no Linux |
 | Botão inferior — A / ✕ / B no Switch | Clicar; no teclado visual, digitar a tecla selecionada       |
 | Botão direito — B / ○ / A no Switch  | Clique direito                                               |
 | Botão esquerdo — X / □ / Y no Switch | Enter                                                        |
@@ -47,19 +47,21 @@ Configurações de versões anteriores continuam válidas e recebem o roteiro um
 | L3                                   | Abrir o lançador do sistema                                  |
 | LB / L1                              | Tab                                                          |
 | RB / R1                              | Alt+Tab                                                      |
-| R3 — pressionar o analógico direito  | Abrir ou fechar o teclado visual                             |
+| R3 — pressionar o analógico direito  | Abrir ou fechar o teclado, nos modos Desktop e Jogo           |
 | Start + Select / Menu + View         | Pausar ou retomar; solte os botões e centralize para retomar |
 
 Os nomes e comandos completos aparecem no painel, incluindo os equivalentes de Xbox, PlayStation e Switch. A seção de ajustes permite escolher o controle, ajustar velocidade e personalizar o teclado.
 
-Com o teclado visual aberto, o **analógico esquerdo** também move a seleção entre as teclas e navega pelos ajustes. Ele respeita a zona morta e a repetição configuradas. Nas diagonais, o eixo mais inclinado define a direção; se você usar o direcional ao mesmo tempo, ele tem prioridade.
+No Windows, **R3** abre o teclado de toque do sistema. Quando o Windows aceita o layout **Gamepad**, o controle navega pelas teclas nativamente. Se o layout não estiver disponível ou o pedido for rejeitado, o direcional move o ponteiro entre as teclas, o analógico esquerdo move o ponteiro suavemente e **A** seleciona. Isso vale nos modos Desktop e Jogo e só durante a sessão aberta com R3. R3 fecha o teclado; os comandos do app retomam depois de fechar, soltar e centralizar o controle. Abrir o teclado automaticamente pelo Windows não libera a navegação nativa no modo Desktop.
+
+No teclado próprio do Linux, o **analógico esquerdo** move a seleção entre as teclas e navega pelos ajustes. Ele respeita a zona morta e a repetição configuradas. Nas diagonais, o eixo mais inclinado define a direção; se você usar o direcional ao mesmo tempo, ele tem prioridade.
 
 ## O que saber antes de usar
 
-- As setas do direcional são enviadas ao aplicativo ativo; o suporte depende do próprio aplicativo.
-- Nos painéis nativos do Windows, o app verifica a janela ativa, o controle focado e sua janela raiz para evitar duplicar a navegação do direcional. Isso inclui as configurações rápidas hospedadas por `System32\ShellHost.exe` (`ControlCenterWindow`) no Windows 11 recente.
+- No Windows, o direcional não envia setas ao aplicativo ativo durante o modo Desktop. Na sessão de teclado aberta com R3, o próprio Windows recebe direcional e analógico. No Linux, as setas são enviadas ao aplicativo ativo e o suporte depende do próprio aplicativo.
+- No Windows, o modo Desktop ativo filtra as teclas virtuais de gamepad geradas pelo sistema. O filtro libera a navegação nativa durante a sessão de teclado aberta com R3, no modo Jogo, na pausa e na desconexão. Ele não bloqueia aplicativos que leem diretamente o controle; veja os [limites e a validação no Windows 11](docs/windows-gamepad-navigation.md).
 - No Windows, pausar com Start + Select oculta os cursores padrão enquanto há um controle conectado. Retomar, desconectar o controle ou encerrar normalmente pela bandeja restaura o esquema de cursores. Cursores personalizados de aplicativos podem continuar visíveis. Se o processo for encerrado à força durante a pausa, reaplique o esquema em Configurações do mouse → Ponteiros para restaurá-los.
-- O teclado visual usa o layout QWERTY em inglês. No Linux, símbolos e acentos podem variar conforme o layout ativo.
+- O teclado próprio do Linux usa o layout QWERTY em inglês; símbolos e acentos podem variar conforme o layout ativo. O teclado de toque do Windows usa os layouts e idiomas configurados no sistema.
 - Em algumas sessões Wayland, incluindo o GNOME Wayland, o teclado visual não está disponível.
 - Os pacotes Windows e Linux existem, mas o uso com controle físico ainda precisa de validação em Windows 11, Linux/X11 e Wayland.
 
@@ -67,4 +69,5 @@ Com o teclado visual aberto, o **analógico esquerdo** também move a seleção 
 
 - [Como o sistema funciona](docs/system-overview.md): controles, fluxo do controle, diferenças entre sistemas, limites e execução.
 - [Pesquisa do teclado visual](docs/keyboard-research.md): decisões de layout, foco e posicionamento.
+- [Navegação do gamepad no Windows](docs/windows-gamepad-navigation.md): filtro de teclas virtuais, limites e validação física.
 - [Roadmap](docs/roadmap.md): trabalho concluído e validações pendentes.

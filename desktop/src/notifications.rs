@@ -40,6 +40,17 @@ pub(crate) enum Notification {
 }
 
 impl Notification {
+    pub(crate) fn mode_change(
+        previous: ControlMode,
+        current: ControlMode,
+        locale: Locale,
+    ) -> Option<Self> {
+        (previous != current).then_some(Self::InputModeChanged {
+            mode: current,
+            locale,
+        })
+    }
+
     fn content(&self) -> (String, String) {
         let locale = match self {
             Self::ControlState { locale, .. }
@@ -252,6 +263,33 @@ mod windows_shortcut {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn mode_changes_notify_both_directions_without_repeating_unchanged_modes() {
+        for previous in [ControlMode::Desktop, ControlMode::Game] {
+            for current in [ControlMode::Desktop, ControlMode::Game] {
+                let notice = Notification::mode_change(previous, current, Locale::PortugueseBrazil);
+                if previous == current {
+                    assert_eq!(notice, None);
+                } else {
+                    assert_eq!(
+                        notice,
+                        Some(Notification::InputModeChanged {
+                            mode: current,
+                            locale: Locale::PortugueseBrazil,
+                        })
+                    );
+                    assert_eq!(
+                        notice.unwrap().content().1,
+                        Locale::PortugueseBrazil.text(match current {
+                            ControlMode::Desktop => Text::DesktopModeNotice,
+                            ControlMode::Game => Text::GameModeNotice,
+                        })
+                    );
+                }
+            }
+        }
+    }
 
     #[test]
     fn pause_and_resume_notices_are_localized_and_explain_the_rearm() {

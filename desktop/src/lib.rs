@@ -10,9 +10,16 @@ pub mod preferences;
 pub mod runtime;
 pub(crate) mod startup;
 pub mod tray;
+pub mod updater;
 
 #[cfg(any(target_os = "windows", test))]
 mod windows_navigation;
+
+#[cfg(target_os = "windows")]
+mod windows_gamepad_hook;
+
+#[cfg(target_os = "windows")]
+mod windows_touch_keyboard;
 
 #[cfg(target_os = "linux")]
 #[path = "linux.rs"]

@@ -174,7 +174,7 @@ impl DesktopRuntime {
     pub fn configure(&self, settings: ControlSettings) {
         let mut state = self.state.lock().expect("runtime state lock");
         let enabled_changed = state.settings.enabled != settings.enabled;
-        let mode_changed = state.settings.mode != settings.mode;
+        let mode_before = state.settings.mode;
         let locale = state.locale;
         state.settings = settings;
         drop(state);
@@ -184,11 +184,8 @@ impl DesktopRuntime {
                 locale,
             });
         }
-        if mode_changed && settings.mode == ControlMode::Desktop {
-            self.notifications.send(Notification::InputModeChanged {
-                mode: settings.mode,
-                locale,
-            });
+        if let Some(notice) = Notification::mode_change(mode_before, settings.mode, locale) {
+            self.notifications.send(notice);
         }
     }
 
@@ -326,7 +323,9 @@ fn run(
             let (actions, notifications) = {
                 sync_input_tracker(
                     &mut input_tracker,
-                    controller.keyboard.open,
+                    controller.keyboard.open
+                        && controller.keyboard.presentation
+                            != crate::keyboard::KeyboardPresentation::System,
                     crate::focused_input::InputTracker::default,
                 );
                 controller.keyboard.focused_input = input_tracker
@@ -357,12 +356,10 @@ fn run(
                         locale,
                     });
                 }
-                if state.settings.mode != mode_before && state.settings.mode == ControlMode::Desktop
+                if let Some(notice) =
+                    Notification::mode_change(mode_before, state.settings.mode, locale)
                 {
-                    notifications.push(Notification::InputModeChanged {
-                        mode: state.settings.mode,
-                        locale,
-                    });
+                    notifications.push(notice);
                 }
                 (actions, notifications)
             };
@@ -390,7 +387,11 @@ fn run(
                                 .or_else(|| Some("Este compositor não permite exibir o teclado próprio sem ativá-lo.".to_owned()));
                         } else {
                             controller.keyboard.status = Some(if open {
-                                "Teclado visual próprio · direcional move · A digita · B apaga · R3 fecha."
+                                if controller.keyboard.presentation == crate::keyboard::KeyboardPresentation::System {
+                                    "Teclado do Windows aberto · R3 fecha."
+                                } else {
+                                    "Teclado visual próprio · direcional move · A digita · B apaga · R3 fecha."
+                                }
                             } else {
                                 "Teclado visual fechado."
                             }.to_owned());
@@ -438,11 +439,15 @@ fn run(
                 preference_save = Some((pending, thread::spawn(move || pending.save())));
                 pending_preferences = None;
             }
-            if let Err(error) = platform.update_keyboard_overlay(&controller.keyboard) {
+            let keyboard_was_open = controller.keyboard.open;
+            if let Err(error) = platform.update_keyboard_overlay(&mut controller.keyboard) {
                 let was_open = controller.keyboard.open;
                 controller.keyboard.open = false;
-                controller.keyboard.presentation =
-                    crate::keyboard::KeyboardPresentation::Unavailable;
+                if controller.keyboard.presentation != crate::keyboard::KeyboardPresentation::System
+                {
+                    controller.keyboard.presentation =
+                        crate::keyboard::KeyboardPresentation::Unavailable;
+                }
                 controller.keyboard.status = Some(error);
                 let mut runtime_state = state.lock().expect("runtime state lock");
                 runtime_state.keyboard = controller.keyboard.clone();
@@ -454,6 +459,12 @@ fn run(
                         detail: controller.keyboard.status.clone(),
                     });
                 }
+            }
+            if controller.keyboard.open != keyboard_was_open {
+                if !controller.keyboard.open {
+                    controller.require_neutral();
+                }
+                state.lock().expect("runtime state lock").keyboard = controller.keyboard.clone();
             }
             if !controller.keyboard.customizing && controller.keyboard.settings != saved_settings {
                 saved_settings = controller.keyboard.settings;
@@ -474,7 +485,7 @@ fn run(
     if let Some((_, worker)) = preference_save {
         let _ = worker.join();
     }
-    let _ = platform.update_keyboard_overlay(&controller.keyboard);
+    let _ = platform.update_keyboard_overlay(&mut controller.keyboard);
     if controller.keyboard.settings != saved_settings {
         let _ = controller.keyboard.settings.save();
     }

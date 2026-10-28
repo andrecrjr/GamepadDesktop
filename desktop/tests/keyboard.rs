@@ -61,7 +61,7 @@ fn saved_settings_accept_missing_fields_and_bound_extreme_values() {
         serde_json::from_str(r#"{"width":5000,"repeat_interval_ms":0}"#).unwrap();
     let settings = settings.normalized();
     assert_eq!(settings.width, 1000);
-    assert_eq!(settings.repeat_interval_ms, 150);
+    assert_eq!(settings.repeat_interval_ms, 100);
     assert_eq!(
         settings.repeat_delay_ms,
         KeyboardSettings::default().repeat_delay_ms

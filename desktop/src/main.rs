@@ -6,6 +6,8 @@
 use eframe::egui::{self, Color32, RichText};
 use gamepad_desktop::runtime::{DesktopRuntime, RuntimeState};
 use gamepad_desktop::tray::{PanelControl, TrayAction, TrayMenu, create_tray, gamepad_icon_data};
+#[cfg(target_os = "windows")]
+use gamepad_desktop::updater::Updater;
 use gamepad_desktop::{
     control::{ControlMode, KEYBOARD_SHORTCUTS, MOUSE_SHORTCUTS},
     i18n::{Locale, Text},
@@ -139,6 +141,8 @@ struct GamepadDesktopApp {
     tray_error: Option<String>,
     tray_menu: Option<TrayMenu>,
     mapping_text: String,
+    #[cfg(target_os = "windows")]
+    updater: Updater,
 }
 
 impl GamepadDesktopApp {
@@ -154,6 +158,8 @@ impl GamepadDesktopApp {
             tray_error,
             tray_menu,
             mapping_text: String::new(),
+            #[cfg(target_os = "windows")]
+            updater: Updater::default(),
         }
     }
 }
@@ -191,6 +197,25 @@ impl eframe::App for GamepadDesktopApp {
         let locale = state.locale;
         egui::Panel::bottom("desktop-footer").show(ui, |ui| {
             ui.horizontal_wrapped(|ui| {
+                #[cfg(target_os = "windows")]
+                {
+                    if self.updater.poll() {
+                        self.panel.exit();
+                    }
+                    if ui
+                        .add_enabled(
+                            self.updater.enabled(),
+                            egui::Button::new(locale.text(self.updater.button_text())),
+                        )
+                        .clicked()
+                    {
+                        self.updater.activate();
+                    }
+                    if let Some(message) = self.updater.message(locale) {
+                        ui.small(message);
+                    }
+                    ui.separator();
+                }
                 ui.hyperlink_to(locale.text(Text::Donate), "https://ko-fi.com/andrecrjr");
                 ui.separator();
                 ui.hyperlink_to(locale.text(Text::Projects), "https://ac-jr.com");
@@ -409,6 +434,11 @@ fn show_desktop_overview(ui: &mut egui::Ui, state: &RuntimeState, desktop: &Shar
     egui::CollapsingHeader::new(locale.text(Text::KeyboardCommands))
         .default_open(state.keyboard.open)
         .show(ui, |ui| {
+            if state.keyboard.presentation == KeyboardPresentation::System {
+                ui.small(locale.text(Text::SystemKeyboardHelp));
+                shortcut_guide(ui, locale, &MOUSE_SHORTCUTS[..1]);
+                return;
+            }
             ui.small(locale.text(Text::KeyboardCommandsHelp));
             shortcut_guide(ui, locale, &MOUSE_SHORTCUTS[..1]);
             ui.add_space(8.0);
@@ -549,6 +579,10 @@ fn show_desktop_settings(
             }
         });
     egui::CollapsingHeader::new(locale.text(Text::CustomizeKeyboard)).show(ui, |ui| {
+        if state.keyboard.presentation == KeyboardPresentation::System {
+            ui.label(locale.text(Text::SystemKeyboardHelp));
+            return;
+        }
         let mut settings = state.keyboard.settings;
         let mut changed = ui
             .add(
