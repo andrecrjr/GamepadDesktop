@@ -2,6 +2,30 @@
 name = "gamepad-desktop"
 version = "0.1.0"
 edition = "2024"
+description = "Control the desktop and type with a gamepad"
+license = "MIT"
+repository = "https://github.com/andrecrjr/GamepadDesktop"
+readme = "README.md"
+
+[package.metadata.deb]
+name = "gamepad-desktop"
+maintainer = "Gamepad Desktop Maintainers <andrecrjr@users.noreply.github.com>"
+depends = "$auto"
+section = "utils"
+priority = "optional"
+assets = [
+  "$auto",
+  [
+    "packaging/gamepad-desktop.desktop",
+    "usr/share/applications/gamepad-desktop.desktop",
+    "644",
+  ],
+  [
+    "assets/gamepad-desktop.svg",
+    "usr/share/icons/hicolor/scalable/apps/gamepad-desktop.svg",
+    "644",
+  ],
+]
 
 [features]
 default = ["bundled-sdl"]
@@ -25,6 +49,7 @@ egui_extras = { version = "0.37", default-features = false, features = ["svg"] }
 sha2 = "0.11.1"
 
 [target.'cfg(target_os = "linux")'.dependencies]
+reqwest = { version = "0.13.5", default-features = false, features = ["blocking", "json", "rustls"] }
 evdev = "0.13.2"
 atspi = { version = "0.29", default-features = false, features = ["proxies", "zbus"] }
 zbus = { version = "5", default-features = false, features = ["async-io"] }

@@ -30,6 +30,14 @@
             "label": "Gamepad Desktop for Linux x64"
           },
           {
+            "path": "desktop/dist/GamepadDesktop-Linux-x64.deb",
+            "label": "Gamepad Desktop for Debian, Ubuntu, and Pop!_OS (.deb)"
+          },
+          {
+            "path": "desktop/dist/GamepadDesktop-Linux-x64.build",
+            "label": "Linux build revision (used by the updater)"
+          },
+          {
             "path": "CHANGELOG.md",
             "label": "Gamepad Desktop changelog"
           }

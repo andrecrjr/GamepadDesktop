@@ -2,7 +2,7 @@
 
 Use o controle para navegar pelo computador, mover o ponteiro e digitar sem tirar o foco do aplicativo que você está usando.
 
-O app controla o ponteiro e envia comandos de teclado. No Windows, R3 abre o teclado de toque do próprio sistema; no Linux, abre o teclado visual do app. Ele continua funcionando quando o painel é recolhido para a bandeja do sistema.
+O app controla o ponteiro e envia comandos de teclado. No Windows, R3 abre o teclado de toque do próprio sistema. No COSMIC Wayland, R3 abre o teclado do desktop; nos demais ambientes Linux, usa o teclado visual do app quando o compositor permite. Ele continua funcionando quando o painel é recolhido para a bandeja do sistema.
 
 Notificações do sistema avisam sobre pausa e retomada, conexão do controle e falhas mesmo com o painel recolhido. No Windows, a primeira execução cria o atalho por usuário “Gamepad Desktop” no menu Iniciar para identificar os avisos.
 
@@ -14,7 +14,7 @@ Notificações do sistema avisam sobre pausa e retomada, conexão do controle e 
 
 No Windows, baixe o [executável x64](dist/GamepadDesktop-Windows-x64.exe), conecte o controle e abra `GamepadDesktop-Windows-x64.exe`. O painel mostra quando o controle foi reconhecido e quais comandos estão disponíveis. Use **Buscar atualizações**, no rodapé do painel, para instalar a versão mais recente e reiniciar o app.
 
-No Linux, baixe e extraia o [pacote x64](dist/GamepadDesktop-Linux-x64.tar.gz). As instruções para executar o app e as permissões necessárias estão no [guia do sistema](docs/system-overview.md#como-iniciar-no-linux).
+Em distribuições x64 baseadas em Debian (como Debian, Ubuntu e Pop!_OS), instale o [pacote `.deb`](dist/GamepadDesktop-Linux-x64.deb) pela loja do sistema ou com `sudo apt install ./GamepadDesktop-Linux-x64.deb`. **Buscar atualizações** baixa o novo pacote e pede autorização para instalá-lo. Em outras distribuições, baixe e extraia o [pacote x64 `.tar.gz`](dist/GamepadDesktop-Linux-x64.tar.gz); abra o app a partir de uma pasta gravável pelo usuário para permitir a troca do executável. Para gerar os pacotes localmente, instale `cargo-deb` com `cargo install cargo-deb --version 3.8.0 --locked`. As instruções para executar o app e as permissões necessárias estão no [guia do sistema](docs/system-overview.md#como-iniciar-no-linux).
 
 ## Boas-vindas e prática guiada
 

@@ -6,7 +6,7 @@
 use eframe::egui::{self, Color32, RichText};
 use gamepad_desktop::runtime::{DesktopRuntime, RuntimeState};
 use gamepad_desktop::tray::{PanelControl, TrayAction, TrayMenu, create_tray, gamepad_icon_data};
-#[cfg(target_os = "windows")]
+#[cfg(any(target_os = "windows", target_os = "linux"))]
 use gamepad_desktop::updater::Updater;
 use gamepad_desktop::{
     control::{ControlMode, KEYBOARD_SHORTCUTS, MOUSE_SHORTCUTS},
@@ -141,7 +141,7 @@ struct GamepadDesktopApp {
     tray_error: Option<String>,
     tray_menu: Option<TrayMenu>,
     mapping_text: String,
-    #[cfg(target_os = "windows")]
+    #[cfg(any(target_os = "windows", target_os = "linux"))]
     updater: Updater,
 }
 
@@ -158,7 +158,7 @@ impl GamepadDesktopApp {
             tray_error,
             tray_menu,
             mapping_text: String::new(),
-            #[cfg(target_os = "windows")]
+            #[cfg(any(target_os = "windows", target_os = "linux"))]
             updater: Updater::default(),
         }
     }
@@ -197,7 +197,7 @@ impl eframe::App for GamepadDesktopApp {
         let locale = state.locale;
         egui::Panel::bottom("desktop-footer").show(ui, |ui| {
             ui.horizontal_wrapped(|ui| {
-                #[cfg(target_os = "windows")]
+                #[cfg(any(target_os = "windows", target_os = "linux"))]
                 {
                     if self.updater.poll() {
                         self.panel.exit();

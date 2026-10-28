@@ -32,7 +32,7 @@ jobs:
 
   build-linux:
     needs: brand-assets
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v7
       - name: Install Rust
@@ -42,7 +42,9 @@ jobs:
       - name: Install Linux dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y build-essential cmake pkg-config libasound2-dev libudev-dev libx11-dev libxcursor-dev libxrandr-dev libxi-dev libxinerama-dev libxkbcommon-dev libxkbcommon-x11-dev libwayland-dev libegl1-mesa-dev libdbus-1-dev libatspi2.0-dev
+          sudo apt-get install -y build-essential cmake dpkg-dev pkg-config libasound2-dev libudev-dev libx11-dev libxcursor-dev libxrandr-dev libxi-dev libxinerama-dev libxkbcommon-dev libxkbcommon-x11-dev libwayland-dev libegl1-mesa-dev libdbus-1-dev libatspi2.0-dev
+      - name: Install cargo-deb
+        run: cargo install cargo-deb --version 3.8.0 --locked
       - run: cargo fmt --manifest-path desktop/Cargo.toml -- --check
       - run: cargo clippy --manifest-path desktop/Cargo.toml --all-targets -- -D warnings
       - run: cargo test --manifest-path desktop/Cargo.toml
@@ -51,12 +53,17 @@ jobs:
         run: |
           mkdir -p desktop/dist
           tar -C desktop/target/release -czf desktop/dist/GamepadDesktop-Linux-x64.tar.gz gamepad-desktop
+          printf '%s\n' "$GITHUB_SHA" > desktop/dist/GamepadDesktop-Linux-x64.build
+          cargo deb --manifest-path desktop/Cargo.toml --no-build --deb-revision "$GITHUB_RUN_NUMBER" --output desktop/dist/GamepadDesktop-Linux-x64.deb
       - name: Upload Linux package
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         uses: actions/upload-artifact@v7
         with:
           name: GamepadDesktop-Linux-x64
-          path: desktop/dist/GamepadDesktop-Linux-x64.tar.gz
+          path: |
+            desktop/dist/GamepadDesktop-Linux-x64.tar.gz
+            desktop/dist/GamepadDesktop-Linux-x64.deb
+            desktop/dist/GamepadDesktop-Linux-x64.build
           if-no-files-found: error
 
   build-windows:
