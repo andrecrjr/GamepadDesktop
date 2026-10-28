@@ -4,6 +4,10 @@ use evdev::{
 };
 use std::env;
 
+#[path = "cosmic_keyboard.rs"]
+mod cosmic_keyboard;
+use cosmic_keyboard::CosmicKeyboard;
+
 use crate::control::{Action, DpadDirection, KeyboardInput, MouseButton, SystemKey};
 use crate::{
     keyboard::{KeyboardModifiers, KeyboardPresentation, KeyboardSession},
@@ -18,6 +22,7 @@ pub struct Platform {
     pointer: VirtualDevice,
     keyboard: VirtualDevice,
     keyboard_overlay: Option<WaylandKeyboardOverlay>,
+    cosmic_keyboard: Option<CosmicKeyboard>,
     keyboard_presentation: KeyboardPresentation,
     keyboard_overlay_error: Option<String>,
 }
@@ -55,10 +60,20 @@ impl Platform {
             } else {
                 (None, KeyboardPresentation::Viewport, None)
             };
+            let cosmic_keyboard = CosmicKeyboard::connect(
+                is_wayland,
+                &env::var("XDG_CURRENT_DESKTOP").unwrap_or_default(),
+            );
+            let keyboard_presentation = if cosmic_keyboard.is_some() {
+                KeyboardPresentation::System
+            } else {
+                keyboard_presentation
+            };
             Ok(Self {
                 pointer,
                 keyboard,
                 keyboard_overlay,
+                cosmic_keyboard,
                 keyboard_presentation,
                 keyboard_overlay_error,
             })
@@ -85,6 +100,28 @@ impl Platform {
     }
 
     pub fn update_keyboard_overlay(&mut self, session: &mut KeyboardSession) -> Result<(), String> {
+        if let Some(keyboard) = &mut self.cosmic_keyboard {
+            match keyboard.update(session.open) {
+                Ok(()) => return Ok(()),
+                Err(error) => {
+                    // Release native ownership before restoring the existing Linux path.
+                    let _ = keyboard.update(false);
+                    self.cosmic_keyboard = None;
+                    self.keyboard_presentation = if self.keyboard_overlay.is_some() {
+                        KeyboardPresentation::WaylandLayer
+                    } else {
+                        KeyboardPresentation::Unavailable
+                    };
+                    session.presentation = self.keyboard_presentation;
+                    session.status = Some(format!(
+                        "COSMIC indisponível; usando teclado próprio: {error}"
+                    ));
+                    if self.keyboard_overlay.is_none() {
+                        return Err(error);
+                    }
+                }
+            }
+        }
         let Some(overlay) = &mut self.keyboard_overlay else {
             return Ok(());
         };

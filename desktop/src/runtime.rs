@@ -388,7 +388,7 @@ fn run(
                         } else {
                             controller.keyboard.status = Some(if open {
                                 if controller.keyboard.presentation == crate::keyboard::KeyboardPresentation::System {
-                                    "Teclado do Windows aberto · R3 fecha."
+                                    "Teclado do sistema aberto · R3 fecha."
                                 } else {
                                     "Teclado visual próprio · direcional move · A digita · B apaga · R3 fecha."
                                 }
@@ -440,6 +440,7 @@ fn run(
                 pending_preferences = None;
             }
             let keyboard_was_open = controller.keyboard.open;
+            let presentation_before = controller.keyboard.presentation;
             if let Err(error) = platform.update_keyboard_overlay(&mut controller.keyboard) {
                 let was_open = controller.keyboard.open;
                 controller.keyboard.open = false;
@@ -460,7 +461,9 @@ fn run(
                     });
                 }
             }
-            if controller.keyboard.open != keyboard_was_open {
+            if controller.keyboard.open != keyboard_was_open
+                || controller.keyboard.presentation != presentation_before
+            {
                 if !controller.keyboard.open {
                     controller.require_neutral();
                 }

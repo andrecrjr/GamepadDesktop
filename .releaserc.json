@@ -23,11 +23,7 @@
         "assets": [
           {
             "path": "desktop/dist/GamepadDesktop-Windows-x64.exe",
-            "label": "Gamepad Desktop for Windows x64 (updater)"
-          },
-          {
-            "path": "desktop/dist/GamepadDesktop-Windows-x64.zip",
-            "label": "Gamepad Desktop for Windows x64"
+            "label": "Gamepad Desktop for Windows x64 (.exe)"
           },
           {
             "path": "desktop/dist/GamepadDesktop-Linux-x64.tar.gz",

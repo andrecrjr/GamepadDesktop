@@ -69,19 +69,16 @@ jobs:
           rustup toolchain install stable --profile minimal
           rustup default stable
       - run: cargo build --manifest-path desktop/Cargo.toml --release
-      - name: Package Windows x64
+      - name: Prepare Windows x64 executable
         run: |
           New-Item -ItemType Directory -Force -Path desktop/dist | Out-Null
           Copy-Item -LiteralPath desktop/target/release/gamepad-desktop.exe -Destination desktop/dist/GamepadDesktop-Windows-x64.exe -Force
-          Compress-Archive -LiteralPath desktop/target/release/gamepad-desktop.exe -DestinationPath desktop/dist/GamepadDesktop-Windows-x64.zip -Force
-      - name: Upload Windows package
+      - name: Upload Windows executable
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         uses: actions/upload-artifact@v7
         with:
           name: GamepadDesktop-Windows-x64
-          path: |
-            desktop/dist/GamepadDesktop-Windows-x64.exe
-            desktop/dist/GamepadDesktop-Windows-x64.zip
+          path: desktop/dist/GamepadDesktop-Windows-x64.exe
           if-no-files-found: error
 
   release:

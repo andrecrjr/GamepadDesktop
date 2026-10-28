@@ -334,6 +334,17 @@ impl MouseController {
             return actions;
         }
         if self.keyboard.open {
+            // COSMIC reads the physical controller itself. Never inject duplicate input.
+            #[cfg(target_os = "linux")]
+            if self.keyboard.presentation == crate::keyboard::KeyboardPresentation::System {
+                self.release(&mut actions);
+                if frame.pressed(Button::East) && !self.previous.pressed(Button::East) {
+                    self.close_keyboard(&mut actions);
+                    self.require_neutral();
+                }
+                self.previous = *frame;
+                return actions;
+            }
             if self.system_keyboard_uses_gamepad {
                 self.release_mouse(&mut actions);
                 self.update_keyboard(frame, elapsed, settings.deadzone, &mut actions);

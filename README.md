@@ -10,7 +10,7 @@ For local development, install Rust and the desktop dependencies described in th
 make desktop-run
 ```
 
-The Windows release ZIP and Linux release archive are available from GitHub Releases. The Linux archive contains the `gamepad-desktop` executable; see the [desktop guide](desktop/README.md) for platform setup and known limitations.
+The Windows executable and Linux release archive are available from GitHub Releases. The Linux archive contains the `gamepad-desktop` executable; see the [desktop guide](desktop/README.md) for platform setup and known limitations.
 
 ## Development commands
 
@@ -44,4 +44,4 @@ prompts are separate instructional assets.
 
 ## Releases
 
-Conventional Commits on `main` drive semantic-release. A release uses a `desktop-v*` tag and attaches Windows x64 and Linux x64 desktop packages. The extension is validated and built separately; it is not included in desktop releases.
+Conventional Commits on `main` drive semantic-release. A release uses a `desktop-v*` tag and attaches the Windows x64 executable and Linux x64 archive. The extension is validated and built separately; it is not included in desktop releases.

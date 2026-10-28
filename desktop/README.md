@@ -12,7 +12,7 @@ Notificações do sistema avisam sobre pausa e retomada, conexão do controle e 
 
 ## Começar
 
-No Windows, baixe e extraia o [pacote x64](dist/GamepadDesktop-Windows-x64.zip), conecte o controle e abra `gamepad-desktop.exe`. O painel mostra quando o controle foi reconhecido e quais comandos estão disponíveis. Use **Buscar atualizações**, no rodapé do painel, para instalar a versão mais recente e reiniciar o app.
+No Windows, baixe o [executável x64](dist/GamepadDesktop-Windows-x64.exe), conecte o controle e abra `GamepadDesktop-Windows-x64.exe`. O painel mostra quando o controle foi reconhecido e quais comandos estão disponíveis. Use **Buscar atualizações**, no rodapé do painel, para instalar a versão mais recente e reiniciar o app.
 
 No Linux, baixe e extraia o [pacote x64](dist/GamepadDesktop-Linux-x64.tar.gz). As instruções para executar o app e as permissões necessárias estão no [guia do sistema](docs/system-overview.md#como-iniciar-no-linux).
 
@@ -71,3 +71,18 @@ No teclado próprio do Linux, o **analógico esquerdo** move a seleção entre a
 - [Pesquisa do teclado visual](docs/keyboard-research.md): decisões de layout, foco e posicionamento.
 - [Navegação do gamepad no Windows](docs/windows-gamepad-navigation.md): filtro de teclas virtuais, limites e validação física.
 - [Roadmap](docs/roadmap.md): trabalho concluído e validações pendentes.
+
+### Teclado no COSMIC (Wayland)
+
+Em sessões COSMIC, o app usa o `cosmic-osk` já iniciado pelo desktop. R3 abre/fecha;
+COSMIC controla a seleção e digitação pelo gamepad, e B fecha. As teclas e o layout
+seguem as configurações do COSMIC. O app não injeta entradas duplicadas enquanto
+esse teclado está aberto.
+
+Se o serviço não estiver disponível ou rejeitar o comando, o app usa o teclado
+próprio existente. Outros desktops Linux continuam usando esse teclado, com as
+mesmas limitações de compositor (incluindo a ausência de layer-shell no GNOME).
+A integração usa as ações `show`/`hide` de `com.system76.CosmicOSK`; elas alteram o
+estado `always_shown` do COSMIC. Não habilite abertura automática do OSK por outros
+atalhos durante o uso: esta integração acompanha aberturas por R3 e fechamento por
+R3/B, não toda mudança externa de visibilidade.

@@ -771,3 +771,26 @@ fn disconnect_leaves_keyboard_settings_mode_and_clears_pending_modifiers() {
     assert!(!controller.keyboard.customizing);
     assert!(!controller.keyboard.modifiers.alt);
 }
+
+#[cfg(target_os = "linux")]
+#[test]
+fn cosmic_keyboard_owns_input_until_b_or_r3_closes_it() {
+    let (mut controller, mut settings) = ready();
+    controller.set_system_keyboard_uses_gamepad(true);
+    controller.keyboard.presentation = gamepad_desktop::keyboard::KeyboardPresentation::System;
+    controller.update(Some(&pressed(Button::RightStick)), TICK, &mut settings);
+    controller.update(Some(&GamepadFrame::default()), TICK, &mut settings);
+    let mut input = pressed(Button::South);
+    input.buttons[Button::Right as usize] = true;
+    input.x = 1.0;
+    assert!(
+        controller
+            .update(Some(&input), TICK, &mut settings)
+            .is_empty()
+    );
+    assert_eq!(
+        controller.update(Some(&pressed(Button::East)), TICK, &mut settings),
+        vec![Action::OnScreenKeyboard(false)]
+    );
+    assert!(!controller.keyboard.open);
+}

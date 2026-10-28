@@ -2,7 +2,6 @@
 
 NPM ?= npm
 CARGO ?= cargo
-ZIP ?= zip
 DESKTOP_MANIFEST := desktop/Cargo.toml
 LINUX_TARGET ?= x86_64-unknown-linux-gnu
 WINDOWS_TARGET ?= x86_64-pc-windows-gnu
@@ -10,7 +9,6 @@ MINGW_BIN ?= $$HOME/.local/share/gamepad-navigator/toolchains/mingw/usr/bin
 DESKTOP_DIST_DIR := desktop/dist
 WINDOWS_BINARY := desktop/target/$(WINDOWS_TARGET)/release/gamepad-desktop.exe
 WINDOWS_RELEASE_BINARY := $(DESKTOP_DIST_DIR)/GamepadDesktop-Windows-x64.exe
-WINDOWS_PACKAGE := $(DESKTOP_DIST_DIR)/GamepadDesktop-Windows-x64.zip
 LINUX_BINARY := desktop/target/$(LINUX_TARGET)/release/gamepad-desktop
 LINUX_PACKAGE := $(DESKTOP_DIST_DIR)/GamepadDesktop-Linux-x64.tar.gz
 
@@ -37,8 +35,8 @@ help:
 		'Extension: web-install, web-dev, web-build, web-package, web-typecheck, web-lint, web-format, web-format-check, web-test' \
 		'Desktop:   desktop-run, desktop-build, desktop-clean-dist, desktop-release, desktop-linux, desktop-linux-package, desktop-windows, desktop-packages, desktop-check, desktop-lint, desktop-format, desktop-format-check, desktop-test, desktop-preview' \
 		'' \
-		'desktop-build and desktop-packages clean desktop/dist and build Linux and Windows x64 release packages; install the Windows build tools first.' \
-		'desktop-windows builds and packages x64 Windows; install the Rust target, MinGW, CMake, and zip first.'
+		'desktop-build and desktop-packages clean desktop/dist and build a Linux x64 archive and Windows x64 executable; install the Windows build tools first.' \
+		'desktop-windows builds the Windows x64 executable; install the Rust target, MinGW, and CMake first.'
 
 dev: web-dev
 
@@ -101,19 +99,17 @@ desktop-linux-package: desktop-clean-dist desktop-linux
 	mkdir -p $(DESKTOP_DIST_DIR)
 	tar -czf $(LINUX_PACKAGE) -C $(dir $(LINUX_BINARY)) $(notdir $(LINUX_BINARY))
 
-desktop-windows: desktop-clean-dist
+desktop-windows:
 	PATH="$(if $(MINGW_BIN),$(MINGW_BIN):)$$PATH" $(CARGO) build --manifest-path $(DESKTOP_MANIFEST) --release --target $(WINDOWS_TARGET)
 	mkdir -p $(DESKTOP_DIST_DIR)
 	cp $(WINDOWS_BINARY) $(WINDOWS_RELEASE_BINARY)
-	$(ZIP) -q -j -FS $(WINDOWS_PACKAGE) $(WINDOWS_BINARY)
-	rm -f $(DESKTOP_DIST_DIR)/gamepad-desktop.exe
+	rm -f $(DESKTOP_DIST_DIR)/GamepadDesktop-Windows-x64.zip
 
 desktop-clean-dist:
 	mkdir -p $(DESKTOP_DIST_DIR)
 	find $(DESKTOP_DIST_DIR) -mindepth 1 -maxdepth 1 \
 		! -name .stfolder \
 		! -name $(notdir $(WINDOWS_RELEASE_BINARY)) \
-		! -name $(notdir $(WINDOWS_PACKAGE)) \
 		! -name $(notdir $(LINUX_PACKAGE)) \
 		-exec rm -rf -- {} +
 
