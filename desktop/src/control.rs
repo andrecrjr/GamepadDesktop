@@ -10,9 +10,9 @@ pub const MOUSE_SHORTCUTS: &[(&str, &str)] = &[
     (
         "R3 · pressionar analógico direito",
         if cfg!(target_os = "windows") {
-            "Abrir / fechar teclado do Windows"
+            "Abrir / fechar teclado do Windows no modo Desktop"
         } else {
-            "Abrir / fechar teclado visual próprio"
+            "Abrir / fechar teclado visual próprio no modo Desktop"
         },
     ),
     (
@@ -52,6 +52,7 @@ pub const MOUSE_SHORTCUTS: &[(&str, &str)] = &[
         "Select · dois toques rápidos",
         "Alternar entre Desktop e Jogo",
     ),
+    ("Select/Back + R3 · modo Jogo", "Abrir / fechar teclado"),
 ];
 
 pub const KEYBOARD_SHORTCUTS: &[(&str, &str)] = &[
@@ -281,7 +282,16 @@ impl MouseController {
         let pause_chord = frame.pressed(Button::Start) && frame.pressed(Button::Select);
         let previous_pause_chord =
             self.previous.pressed(Button::Start) && self.previous.pressed(Button::Select);
+        let keyboard_chord = settings.mode == ControlMode::Game
+            && !pause_chord
+            && frame.pressed(Button::Select)
+            && frame.pressed(Button::RightStick)
+            && !(self.previous.pressed(Button::Select)
+                && self.previous.pressed(Button::RightStick));
         if pause_chord {
+            self.select_tap_remaining = None;
+        }
+        if keyboard_chord {
             self.select_tap_remaining = None;
         }
         if settings.mode == ControlMode::Desktop
@@ -294,7 +304,7 @@ impl MouseController {
         }
         let select_pressed =
             frame.pressed(Button::Select) && !self.previous.pressed(Button::Select);
-        if !self.keyboard.open && !pause_chord && select_pressed {
+        if !self.keyboard.open && !pause_chord && !keyboard_chord && select_pressed {
             if self.select_tap_remaining.is_some() {
                 settings.mode = settings.mode.toggled();
                 self.mode = settings.mode;
@@ -306,6 +316,15 @@ impl MouseController {
                 return actions;
             }
             self.select_tap_remaining = Some(SELECT_DOUBLE_TAP_WINDOW);
+        }
+        let keyboard_toggled =
+            frame.pressed(Button::RightStick) && !self.previous.pressed(Button::RightStick);
+        if (keyboard_toggled || keyboard_chord) && self.keyboard.open {
+            actions.push(self.toggle_keyboard());
+            self.release(&mut actions);
+            self.require_neutral();
+            self.previous = *frame;
+            return actions;
         }
         let input_enabled = settings.mode == ControlMode::Game || settings.enabled;
         if !input_enabled || !self.armed {
@@ -322,9 +341,16 @@ impl MouseController {
             return actions;
         }
 
-        let keyboard_toggled =
-            frame.pressed(Button::RightStick) && !self.previous.pressed(Button::RightStick);
-        if keyboard_toggled {
+        if keyboard_chord {
+            actions.push(self.toggle_keyboard());
+            self.release(&mut actions);
+            if !self.keyboard.open {
+                self.require_neutral();
+            }
+            self.previous = *frame;
+            return actions;
+        }
+        if keyboard_toggled && settings.mode == ControlMode::Desktop {
             actions.push(self.toggle_keyboard());
             self.release(&mut actions);
             if !self.keyboard.open {
@@ -672,4 +698,36 @@ fn accumulate(remainder: &mut f64, amount: f64) -> i32 {
     let whole = remainder.trunc() as i32;
     *remainder -= f64::from(whole);
     whole
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{Action, Button, ControlSettings, GamepadFrame, MouseController};
+    use std::time::Duration;
+
+    #[test]
+    fn r3_closes_an_open_keyboard_even_when_the_controller_requires_neutral() {
+        let tick = Duration::from_millis(10);
+        let mut controller = MouseController::default();
+        let mut settings = ControlSettings::default();
+        let neutral = GamepadFrame::default();
+        controller.set_system_keyboard_uses_gamepad(true);
+        controller.keyboard.presentation = crate::keyboard::KeyboardPresentation::System;
+        controller.update(Some(&neutral), tick, &mut settings);
+
+        let mut r3 = neutral;
+        r3.buttons[Button::RightStick as usize] = true;
+        assert_eq!(
+            controller.update(Some(&r3), tick, &mut settings),
+            vec![Action::OnScreenKeyboard(true)]
+        );
+        controller.update(Some(&neutral), tick, &mut settings);
+        controller.require_neutral();
+
+        assert_eq!(
+            controller.update(Some(&r3), tick, &mut settings),
+            vec![Action::OnScreenKeyboard(false)]
+        );
+        assert!(!controller.keyboard.open);
+    }
 }

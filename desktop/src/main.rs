@@ -180,6 +180,18 @@ impl eframe::App for GamepadDesktopApp {
             ));
         let mut state = self.desktop.lock().expect("desktop runtime lock").state();
         ui.ctx().set_zoom_factor(state.ui_scale.factor());
+        let locale = state.locale;
+        if let Some(error) = &state.error {
+            egui::Panel::top("runtime-error").show(ui, |ui| {
+                ui.horizontal_wrapped(|ui| {
+                    ui.colored_label(DANGER, locale.translate(error));
+                    if ui.button(locale.text(Text::Retry)).clicked() {
+                        *self.desktop.lock().expect("desktop runtime lock") =
+                            DesktopRuntime::default();
+                    }
+                });
+            });
+        }
         let mut keyboard = state.keyboard.clone();
         keyboard.open &= state.onboarding.is_none();
         if keyboard.presentation == KeyboardPresentation::Viewport {
@@ -194,7 +206,6 @@ impl eframe::App for GamepadDesktopApp {
             }
             return;
         }
-        let locale = state.locale;
         egui::Panel::bottom("desktop-footer").show(ui, |ui| {
             ui.horizontal_wrapped(|ui| {
                 #[cfg(any(target_os = "windows", target_os = "linux"))]
@@ -284,7 +295,7 @@ impl eframe::App for GamepadDesktopApp {
                             egui::Layout::top_down_justified(egui::Align::Min),
                             |ui| {
                                 card_frame().show(ui, |ui| {
-                                    show_desktop_overview(ui, &state, desktop);
+                                    show_desktop_overview(ui, &state);
                                 });
                             },
                         );
@@ -308,7 +319,7 @@ impl eframe::App for GamepadDesktopApp {
                     });
                 } else {
                     card_frame().show(ui, |ui| {
-                        show_desktop_overview(ui, &state, desktop);
+                        show_desktop_overview(ui, &state);
                     });
                     ui.add_space(8.0);
                     card_frame().show(ui, |ui| {
@@ -377,28 +388,24 @@ fn show_mode_guide(ui: &mut egui::Ui, state: &mut RuntimeState) -> bool {
     previous != state.settings.mode
 }
 
-fn show_desktop_overview(ui: &mut egui::Ui, state: &RuntimeState, desktop: &SharedDesktop) {
+fn show_desktop_overview(ui: &mut egui::Ui, state: &RuntimeState) {
     let locale = state.locale;
-    if let Some(error) = &state.error {
-        ui.colored_label(DANGER, locale.translate(error));
-    } else if !state.ready {
-        ui.label(locale.text(Text::Connecting));
-    } else if let Some(name) = &state.controller {
-        ui.colored_label(
-            ACCENT,
-            format!("{}{name}", locale.text(Text::ControllerPrefix)),
-        );
-    } else {
-        ui.label(if state.devices.is_empty() {
-            locale.text(Text::ConnectGamepad)
+    if state.error.is_none() {
+        if !state.ready {
+            ui.label(locale.text(Text::Connecting));
+        } else if let Some(name) = &state.controller {
+            ui.colored_label(
+                ACCENT,
+                format!("{}{name}", locale.text(Text::ControllerPrefix)),
+            );
         } else {
-            locale.text(Text::SelectController)
-        });
-        ui.small(locale.text(Text::DeviceSupport));
-    }
-    if state.error.is_some() && ui.button(locale.text(Text::Retry)).clicked() {
-        let runtime = DesktopRuntime::default();
-        *desktop.lock().expect("desktop runtime lock") = runtime;
+            ui.label(if state.devices.is_empty() {
+                locale.text(Text::ConnectGamepad)
+            } else {
+                locale.text(Text::SelectController)
+            });
+            ui.small(locale.text(Text::DeviceSupport));
+        }
     }
     ui.add_space(8.0);
     if state.keyboard.presentation != KeyboardPresentation::Unavailable
@@ -419,6 +426,7 @@ fn show_desktop_overview(ui: &mut egui::Ui, state: &RuntimeState, desktop: &Shar
     accent_heading(ui, locale.text(Text::CommandGuide));
     if state.settings.mode == ControlMode::Game {
         ui.label(locale.text(Text::GameCommandsHelp));
+        shortcut_guide(ui, locale, &MOUSE_SHORTCUTS[13..14]);
     }
     egui::CollapsingHeader::new(locale.text(Text::DesktopCommands))
         .default_open(state.settings.mode == ControlMode::Desktop && !state.keyboard.open)
@@ -508,6 +516,42 @@ fn show_desktop_settings(
         } else {
             state.start_on_login = start_on_login;
         }
+    }
+    if state.cursor_scale_range.supported {
+        let max = state.cursor_scale_range.max_percent;
+        let mut cursor_scale = state.cursor_scale.percent().clamp(100, max);
+        if max > 100
+            && ui
+                .add(
+                    egui::Slider::new(&mut cursor_scale, 100..=max)
+                        .text(locale.text(Text::CursorScale))
+                        .suffix("%")
+                        .step_by(5.0),
+                )
+                .changed()
+        {
+            desktop
+                .lock()
+                .expect("desktop runtime lock")
+                .configure_cursor_scale(cursor_scale);
+            state.cursor_scale = gamepad_desktop::cursor_scale::CursorScale::new(cursor_scale);
+        }
+        if max == 100 {
+            ui.label(format!("{} · 100%", locale.text(Text::CursorScale)));
+        }
+        ui.small(
+            locale
+                .text(Text::CursorScaleHelp)
+                .replace("{max}", &max.to_string()),
+        );
+        if let Some(error) = &state.cursor_scale_error {
+            ui.small(format!(
+                "{}{error}",
+                locale.text(Text::CursorScaleErrorPrefix)
+            ));
+        }
+    } else {
+        ui.small(locale.text(Text::CursorScaleUnavailable));
     }
     egui::CollapsingHeader::new(locale.text(Text::ControlsAndAdjustments))
         .default_open(true)

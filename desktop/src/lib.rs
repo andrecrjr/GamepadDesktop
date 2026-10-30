@@ -1,4 +1,5 @@
 pub mod control;
+pub mod cursor_scale;
 pub mod focused_input;
 pub mod gamepads;
 pub mod i18n;

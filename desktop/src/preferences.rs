@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use crate::{control::ControlSettings, i18n::Locale};
+use crate::{control::ControlSettings, cursor_scale::CursorScale, i18n::Locale};
 
 /// Global interface scale, kept bounded so controls remain reachable.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
@@ -44,6 +44,7 @@ impl UiScale {
 pub struct DesktopPreferences {
     pub locale: Locale,
     pub ui_scale: UiScale,
+    pub cursor_scale: CursorScale,
     pub controls: ControlSettings,
     pub start_on_login: bool,
     pub onboarding_completed: bool,
@@ -54,6 +55,7 @@ impl Default for DesktopPreferences {
         Self {
             locale: Locale::detect(),
             ui_scale: UiScale::default(),
+            cursor_scale: CursorScale::default(),
             controls: ControlSettings::default(),
             start_on_login: false,
             onboarding_completed: false,
@@ -84,6 +86,7 @@ impl DesktopPreferences {
     }
 
     fn normalized(mut self) -> Self {
+        self.cursor_scale = CursorScale::new(self.cursor_scale.percent());
         self.controls = self.controls.normalized();
         self
     }
@@ -98,4 +101,24 @@ fn preferences_path() -> Option<PathBuf> {
         .or_else(|| std::env::var_os("HOME").map(|home| PathBuf::from(home).join(".config")));
 
     directory.map(|path| path.join("gamepad-navigator").join("preferences.json"))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::DesktopPreferences;
+
+    #[test]
+    fn cursor_scale_defaults_to_135_percent_and_loads_for_old_preferences() {
+        let defaults = serde_json::to_value(DesktopPreferences::default()).unwrap();
+        assert_eq!(defaults["cursor_scale"], 135);
+
+        let mut old_preferences = defaults;
+        old_preferences
+            .as_object_mut()
+            .unwrap()
+            .remove("cursor_scale");
+        let restored: DesktopPreferences = serde_json::from_value(old_preferences).unwrap();
+        let restored = serde_json::to_value(restored).unwrap();
+        assert_eq!(restored["cursor_scale"], 135);
+    }
 }

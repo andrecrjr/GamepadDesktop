@@ -292,6 +292,27 @@ mod tests {
     }
 
     #[test]
+    fn mode_notices_include_the_keyboard_command_for_each_mode() {
+        for locale in Locale::ALL {
+            let desktop = Notification::InputModeChanged {
+                mode: ControlMode::Desktop,
+                locale,
+            }
+            .content()
+            .1;
+            let game = Notification::InputModeChanged {
+                mode: ControlMode::Game,
+                locale,
+            }
+            .content()
+            .1;
+
+            assert!(desktop.contains("R3"), "desktop notice: {desktop}");
+            assert!(game.contains("Select/Back + R3"), "game notice: {game}");
+        }
+    }
+
+    #[test]
     fn pause_and_resume_notices_are_localized_and_explain_the_rearm() {
         let paused = Notification::ControlState {
             enabled: false,

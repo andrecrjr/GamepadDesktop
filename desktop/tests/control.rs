@@ -447,6 +447,79 @@ fn r3_cannot_open_keyboard_when_paused_or_connecting_with_it_held() {
 }
 
 #[test]
+fn r3_alone_does_not_open_keyboard_in_game_mode() {
+    use gamepad_desktop::control::ControlMode;
+
+    let mut controller = MouseController::default();
+    let mut settings = ControlSettings {
+        mode: ControlMode::Game,
+        ..Default::default()
+    };
+    let neutral = GamepadFrame::default();
+    controller.update(Some(&neutral), TICK, &mut settings);
+    controller.update(Some(&neutral), TICK, &mut settings);
+
+    assert!(
+        controller
+            .update(Some(&pressed(Button::RightStick)), TICK, &mut settings)
+            .is_empty()
+    );
+    assert!(!controller.keyboard.open);
+}
+
+#[test]
+fn select_and_r3_open_game_keyboard_without_switching_modes() {
+    use gamepad_desktop::control::ControlMode;
+
+    let mut controller = MouseController::default();
+    let mut settings = ControlSettings {
+        mode: ControlMode::Game,
+        ..Default::default()
+    };
+    let neutral = GamepadFrame::default();
+    controller.update(Some(&neutral), TICK, &mut settings);
+    controller.update(Some(&neutral), TICK, &mut settings);
+    assert!(
+        controller
+            .update(Some(&pressed(Button::Select)), TICK, &mut settings)
+            .is_empty()
+    );
+    controller.update(Some(&neutral), TICK, &mut settings);
+
+    let mut shortcut = pressed(Button::Select);
+    shortcut.buttons[Button::RightStick as usize] = true;
+    assert_eq!(
+        controller.update(Some(&shortcut), TICK, &mut settings),
+        vec![Action::OnScreenKeyboard(true)]
+    );
+    assert_eq!(settings.mode, ControlMode::Game);
+    assert!(controller.keyboard.open);
+}
+
+#[test]
+fn select_double_tap_still_switches_from_game_to_desktop() {
+    use gamepad_desktop::control::ControlMode;
+
+    let mut controller = MouseController::default();
+    let mut settings = ControlSettings {
+        mode: ControlMode::Game,
+        ..Default::default()
+    };
+    let neutral = GamepadFrame::default();
+    controller.update(Some(&neutral), TICK, &mut settings);
+    controller.update(Some(&neutral), TICK, &mut settings);
+    controller.update(Some(&pressed(Button::Select)), TICK, &mut settings);
+    controller.update(Some(&neutral), TICK, &mut settings);
+
+    assert!(
+        controller
+            .update(Some(&pressed(Button::Select)), TICK, &mut settings)
+            .is_empty()
+    );
+    assert_eq!(settings.mode, ControlMode::Desktop);
+}
+
+#[test]
 fn game_mode_can_operate_keyboard_and_stop_pointer_after_closing() {
     use gamepad_desktop::control::ControlMode;
 
@@ -460,14 +533,16 @@ fn game_mode_can_operate_keyboard_and_stop_pointer_after_closing() {
         let neutral = GamepadFrame::default();
         controller.update(Some(&neutral), TICK, &mut settings);
         controller.update(Some(&neutral), TICK, &mut settings);
+        let mut shortcut = pressed(Button::Select);
+        shortcut.buttons[Button::RightStick as usize] = true;
         assert_eq!(
-            controller.update(Some(&pressed(Button::RightStick)), TICK, &mut settings),
+            controller.update(Some(&shortcut), TICK, &mut settings),
             vec![Action::OnScreenKeyboard(true)]
         );
         assert!(controller.keyboard.open);
         assert!(
             controller
-                .update(Some(&pressed(Button::RightStick)), TICK, &mut settings)
+                .update(Some(&shortcut), TICK, &mut settings)
                 .is_empty()
         );
         controller.update(Some(&neutral), TICK, &mut settings);
@@ -528,8 +603,10 @@ fn game_keyboard_is_available_even_when_desktop_controls_were_paused() {
     let neutral = GamepadFrame::default();
     controller.update(Some(&neutral), TICK, &mut settings);
     controller.update(Some(&neutral), TICK, &mut settings);
+    let mut shortcut = pressed(Button::Select);
+    shortcut.buttons[Button::RightStick as usize] = true;
     assert_eq!(
-        controller.update(Some(&pressed(Button::RightStick)), TICK, &mut settings),
+        controller.update(Some(&shortcut), TICK, &mut settings),
         vec![Action::OnScreenKeyboard(true)]
     );
     assert!(controller.keyboard.open);
@@ -549,7 +626,11 @@ fn native_keyboard_allows_only_pointer_and_left_click_in_both_modes() {
         let neutral = GamepadFrame::default();
         controller.update(Some(&neutral), TICK, &mut settings);
         controller.update(Some(&neutral), TICK, &mut settings);
-        controller.update(Some(&pressed(Button::RightStick)), TICK, &mut settings);
+        let mut shortcut = pressed(Button::RightStick);
+        if mode == ControlMode::Game {
+            shortcut.buttons[Button::Select as usize] = true;
+        }
+        controller.update(Some(&shortcut), TICK, &mut settings);
         controller.update(Some(&neutral), TICK, &mut settings);
         for button in [
             Button::South,

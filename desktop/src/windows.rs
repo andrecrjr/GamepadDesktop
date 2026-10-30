@@ -11,6 +11,9 @@ use crate::windows_navigation::{
     resolve_native_windows,
 };
 use crate::windows_touch_keyboard::WindowsTouchKeyboard;
+#[path = "windows_cursor_scale.rs"]
+mod windows_cursor_scale;
+use crate::cursor_scale::{CursorScale, CursorScaleRange};
 use windows::{
     Win32::{
         Foundation::{CloseHandle, HWND, LPARAM, POINT},
@@ -29,6 +32,7 @@ use windows::{
     },
     core::{BOOL, PWSTR},
 };
+use windows_cursor_scale::WindowsCursorScale;
 
 const NAVIGATION_TARGET_CHECK_INTERVAL: Duration = Duration::from_millis(50);
 
@@ -41,6 +45,7 @@ pub struct Platform {
     native_dpad: NativeDpadRouting,
     target_cache: [NativeDpadTargetCache; 4],
     paused_cursor: PausedCursor,
+    cursor_scale: WindowsCursorScale,
     last_target_check: Option<Instant>,
 }
 
@@ -58,6 +63,7 @@ impl Platform {
             native_dpad: NativeDpadRouting::default(),
             target_cache: Default::default(),
             paused_cursor: PausedCursor::default(),
+            cursor_scale: WindowsCursorScale::new(),
             last_target_check: None,
         })
     }
@@ -66,6 +72,22 @@ impl Platform {
         if !self.navigation_hook.is_active() {
             self.refresh_native_dpad_target(false);
         }
+    }
+
+    pub fn cursor_scale_range(&self) -> CursorScaleRange {
+        self.cursor_scale.range()
+    }
+
+    pub fn set_cursor_scale(&mut self, scale: CursorScale) -> Result<(), String> {
+        if self.cursor_scale.set(scale)?
+            && !self.desktop_controls_active
+            && !self.touch_keyboard.visible()
+            && self.controller_connected
+        {
+            set_cursor_hidden(true)
+                .map_err(|error| format!("Falha restaurando cursor oculto do Windows: {error}"))?;
+        }
+        Ok(())
     }
 
     pub(crate) fn update_mouse_mode(

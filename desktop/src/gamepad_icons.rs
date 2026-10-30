@@ -53,6 +53,7 @@ pub fn family(context: &egui::Context) -> ControllerFamily {
 pub fn show_shortcut_icons(ui: &mut Ui, family: ControllerFamily, button: &str) {
     let icons: &[Icon] = match button {
         "R3 · pressionar analógico direito" => &[Icon::R3],
+        "Select/Back + R3 · modo Jogo" => &[Icon::View, Icon::R3],
         "L3 · pressionar analógico esquerdo" => &[Icon::L3],
         "Analógico esquerdo" => &[Icon::LeftStick],
         "Analógico direito ↕" => &[Icon::RightStickUp, Icon::RightStickDown],

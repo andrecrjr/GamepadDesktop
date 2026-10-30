@@ -7,9 +7,13 @@ use std::env;
 #[path = "cosmic_keyboard.rs"]
 mod cosmic_keyboard;
 use cosmic_keyboard::CosmicKeyboard;
+#[path = "linux_cursor_scale.rs"]
+mod linux_cursor_scale;
+use linux_cursor_scale::LinuxCursorScale;
 
-use crate::control::{Action, DpadDirection, KeyboardInput, MouseButton, SystemKey};
 use crate::{
+    control::{Action, DpadDirection, KeyboardInput, MouseButton, SystemKey},
+    cursor_scale::{CursorScale, CursorScaleRange},
     keyboard::{KeyboardModifiers, KeyboardPresentation, KeyboardSession},
     wayland_keyboard::WaylandKeyboardOverlay,
 };
@@ -25,6 +29,7 @@ pub struct Platform {
     cosmic_keyboard: Option<CosmicKeyboard>,
     keyboard_presentation: KeyboardPresentation,
     keyboard_overlay_error: Option<String>,
+    cursor_scale: LinuxCursorScale,
 }
 
 impl Platform {
@@ -76,6 +81,7 @@ impl Platform {
                 cosmic_keyboard,
                 keyboard_presentation,
                 keyboard_overlay_error,
+                cursor_scale: LinuxCursorScale::new(),
             })
         };
         create().map_err(|error| format!("Não foi possível criar mouse/teclado virtual em /dev/uinput: {error}. Verifique as permissões da sua sessão."))
@@ -94,6 +100,14 @@ impl Platform {
     }
 
     pub(crate) fn update_native_dpad_target(&mut self) {}
+
+    pub fn cursor_scale_range(&self) -> CursorScaleRange {
+        self.cursor_scale.range()
+    }
+
+    pub fn set_cursor_scale(&mut self, scale: CursorScale) -> Result<(), String> {
+        self.cursor_scale.set(scale).map(|_| ())
+    }
 
     pub(crate) fn update_mouse_mode(&mut self, _: bool, _: bool) -> Result<(), String> {
         Ok(())

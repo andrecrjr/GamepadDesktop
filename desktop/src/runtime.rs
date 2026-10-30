@@ -11,6 +11,7 @@ use sdl3::gamepad::GamepadType;
 
 use crate::{
     control::{Action, ControlMode, ControlSettings, GamepadFrame, MouseController},
+    cursor_scale::{CursorScale, CursorScaleRange},
     gamepads::{GamepadInfo, Gamepads},
     i18n::Locale,
     keyboard::{KeyboardSession, KeyboardSettings},
@@ -31,6 +32,9 @@ mod onboarding_tests;
 pub struct RuntimeState {
     pub locale: Locale,
     pub ui_scale: UiScale,
+    pub cursor_scale: CursorScale,
+    pub cursor_scale_range: CursorScaleRange,
+    pub cursor_scale_error: Option<String>,
     pub settings: ControlSettings,
     pub start_on_login: bool,
     pub controller: Option<String>,
@@ -85,6 +89,7 @@ impl Default for DesktopRuntime {
         let initial = RuntimeState {
             locale: preferences.locale,
             ui_scale: preferences.ui_scale,
+            cursor_scale: preferences.cursor_scale,
             settings: preferences.controls,
             start_on_login: preferences.start_on_login,
             onboarding_completed: preferences.onboarding_completed,
@@ -189,6 +194,10 @@ impl DesktopRuntime {
         }
     }
 
+    pub fn configure_cursor_scale(&self, percent: u16) {
+        self.state.lock().expect("runtime state lock").cursor_scale = CursorScale::new(percent);
+    }
+
     pub fn configure_keyboard(&self, settings: KeyboardSettings) {
         self.state
             .lock()
@@ -208,6 +217,7 @@ impl DesktopRuntime {
         DesktopPreferences {
             locale: state.locale,
             ui_scale: state.ui_scale,
+            cursor_scale: state.cursor_scale,
             controls: state.settings,
             start_on_login: state.start_on_login,
             onboarding_completed: state.onboarding_completed,
@@ -260,6 +270,8 @@ fn run(
 ) -> Result<(), String> {
     let mut input_tracker = None;
     let mut platform = Platform::new()?;
+    state.lock().expect("runtime state lock").cursor_scale_range = platform.cursor_scale_range();
+    let mut applied_cursor_scale = None;
     let mut gamepads = Gamepads::new().map_err(|error| format!("SDL3: {error}"))?;
     state.lock().expect("runtime state lock").mapping_message = gamepads.warning.take();
     let mut controller = MouseController::default();
@@ -367,6 +379,12 @@ fn run(
                 notification_service.send(notification);
             }
             last_tick = now;
+            let cursor_scale = state.lock().expect("runtime state lock").cursor_scale;
+            if applied_cursor_scale != Some(cursor_scale) {
+                applied_cursor_scale = Some(cursor_scale);
+                let error = platform.set_cursor_scale(cursor_scale).err();
+                state.lock().expect("runtime state lock").cursor_scale_error = error;
+            }
             let (input_enabled, native_connected) = state
                 .lock()
                 .expect("runtime state lock")
@@ -419,6 +437,7 @@ fn run(
                 DesktopPreferences {
                     locale: state.locale,
                     ui_scale: state.ui_scale,
+                    cursor_scale: state.cursor_scale,
                     controls: state.settings,
                     start_on_login: state.start_on_login,
                     onboarding_completed: state.onboarding_completed,
