@@ -253,12 +253,7 @@ impl MouseController {
     ) -> Vec<Action> {
         let mut actions = Vec::new();
         let Some(frame) = frame else {
-            self.close_keyboard(&mut actions);
-            self.release(&mut actions);
-            self.connected = false;
-            self.armed = false;
-            self.select_tap_remaining = None;
-            self.previous = GamepadFrame::default();
+            self.disconnect(&mut actions);
             return actions;
         };
         if !self.connected {
@@ -266,12 +261,7 @@ impl MouseController {
             self.connected = true;
         }
         if self.mode != settings.mode {
-            self.mode = settings.mode;
-            self.select_tap_remaining = None;
-            self.close_keyboard(&mut actions);
-            self.release(&mut actions);
-            self.armed = false;
-            self.previous = *frame;
+            self.reset_for_mode_change(frame, settings.mode, &mut actions);
             return actions;
         }
         if let Some(remaining) = self.select_tap_remaining {
@@ -319,7 +309,9 @@ impl MouseController {
         }
         let keyboard_toggled =
             frame.pressed(Button::RightStick) && !self.previous.pressed(Button::RightStick);
-        if (keyboard_toggled || keyboard_chord) && self.keyboard.open {
+        let keyboard_toggle_requested = keyboard_chord
+            || (keyboard_toggled && (settings.mode == ControlMode::Desktop || self.keyboard.open));
+        if keyboard_toggle_requested && self.keyboard.open {
             actions.push(self.toggle_keyboard());
             self.release(&mut actions);
             self.require_neutral();
@@ -341,16 +333,7 @@ impl MouseController {
             return actions;
         }
 
-        if keyboard_chord {
-            actions.push(self.toggle_keyboard());
-            self.release(&mut actions);
-            if !self.keyboard.open {
-                self.require_neutral();
-            }
-            self.previous = *frame;
-            return actions;
-        }
-        if keyboard_toggled && settings.mode == ControlMode::Desktop {
+        if keyboard_toggle_requested {
             actions.push(self.toggle_keyboard());
             self.release(&mut actions);
             if !self.keyboard.open {
@@ -360,48 +343,7 @@ impl MouseController {
             return actions;
         }
         if self.keyboard.open {
-            // COSMIC reads the physical controller itself. Never inject duplicate input.
-            #[cfg(target_os = "linux")]
-            if self.keyboard.presentation == crate::keyboard::KeyboardPresentation::System {
-                self.release(&mut actions);
-                if frame.pressed(Button::East) && !self.previous.pressed(Button::East) {
-                    self.close_keyboard(&mut actions);
-                    self.require_neutral();
-                }
-                self.previous = *frame;
-                return actions;
-            }
-            if self.system_keyboard_uses_gamepad {
-                self.release_mouse(&mut actions);
-                self.update_keyboard(frame, elapsed, settings.deadzone, &mut actions);
-            } else {
-                self.move_pointer(frame, elapsed, settings, &mut actions);
-                for (index, (button, direction)) in [
-                    (Button::Up, DpadDirection::Up),
-                    (Button::Down, DpadDirection::Down),
-                    (Button::Left, DpadDirection::Left),
-                    (Button::Right, DpadDirection::Right),
-                ]
-                .into_iter()
-                .enumerate()
-                {
-                    if self.repeat_direction(
-                        frame.pressed(button),
-                        self.previous.pressed(button),
-                        index,
-                        elapsed,
-                        REPEAT_INITIAL_DELAY,
-                        DIRECTION_REPEAT_INTERVAL,
-                    ) {
-                        actions.push(Action::Dpad(direction));
-                    }
-                }
-                let pressed = frame.pressed(Button::South);
-                if pressed != self.held[0] {
-                    actions.push(Action::Mouse(MouseButton::Left, pressed));
-                    self.held[0] = pressed;
-                }
-            }
+            self.update_keyboard_controls(frame, elapsed, settings, &mut actions);
             self.previous = *frame;
             return actions;
         }
@@ -411,6 +353,92 @@ impl MouseController {
             return actions;
         }
 
+        self.update_desktop_controls(frame, elapsed, settings, &mut actions);
+        self.previous = *frame;
+        actions
+    }
+
+    fn disconnect(&mut self, actions: &mut Vec<Action>) {
+        self.close_keyboard(actions);
+        self.release(actions);
+        self.connected = false;
+        self.armed = false;
+        self.select_tap_remaining = None;
+        self.previous = GamepadFrame::default();
+    }
+
+    fn reset_for_mode_change(
+        &mut self,
+        frame: &GamepadFrame,
+        mode: ControlMode,
+        actions: &mut Vec<Action>,
+    ) {
+        self.mode = mode;
+        self.select_tap_remaining = None;
+        self.close_keyboard(actions);
+        self.release(actions);
+        self.armed = false;
+        self.previous = *frame;
+    }
+
+    fn update_keyboard_controls(
+        &mut self,
+        frame: &GamepadFrame,
+        elapsed: Duration,
+        settings: &ControlSettings,
+        actions: &mut Vec<Action>,
+    ) {
+        #[cfg(target_os = "linux")]
+        if self.keyboard.presentation == crate::keyboard::KeyboardPresentation::System {
+            // COSMIC reads the physical controller itself. Never inject duplicate input.
+            self.release(actions);
+            if frame.pressed(Button::East) && !self.previous.pressed(Button::East) {
+                self.close_keyboard(actions);
+                self.require_neutral();
+            }
+            return;
+        }
+        if self.system_keyboard_uses_gamepad {
+            self.release_mouse(actions);
+            self.update_keyboard(frame, elapsed, settings.deadzone, actions);
+            return;
+        }
+
+        self.move_pointer(frame, elapsed, settings, actions);
+        for (index, (button, direction)) in [
+            (Button::Up, DpadDirection::Up),
+            (Button::Down, DpadDirection::Down),
+            (Button::Left, DpadDirection::Left),
+            (Button::Right, DpadDirection::Right),
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            if self.repeat_direction(
+                frame.pressed(button),
+                self.previous.pressed(button),
+                index,
+                elapsed,
+                REPEAT_INITIAL_DELAY,
+                DIRECTION_REPEAT_INTERVAL,
+            ) {
+                actions.push(Action::Dpad(direction));
+            }
+        }
+        let pressed = frame.pressed(Button::South);
+        if pressed != self.held[0] {
+            actions.push(Action::Mouse(MouseButton::Left, pressed));
+            self.held[0] = pressed;
+        }
+    }
+
+    fn update_desktop_controls(
+        &mut self,
+        frame: &GamepadFrame,
+        elapsed: Duration,
+        settings: &ControlSettings,
+        actions: &mut Vec<Action>,
+    ) {
         for (index, (button, mouse)) in [
             (Button::South, MouseButton::Left),
             (Button::East, MouseButton::Right),
@@ -465,7 +493,7 @@ impl MouseController {
             actions.push(Action::DpadReleased);
             self.dpad_routing_held = false;
         }
-        self.move_pointer(frame, elapsed, settings, &mut actions);
+        self.move_pointer(frame, elapsed, settings, actions);
         let scroll = accumulate(
             &mut self.remainder[2],
             axis_value(frame.scroll, settings.deadzone) * 10.0 * seconds,
@@ -473,8 +501,6 @@ impl MouseController {
         if scroll != 0 {
             actions.push(Action::Scroll(scroll));
         }
-        self.previous = *frame;
-        actions
     }
 
     fn move_pointer(
