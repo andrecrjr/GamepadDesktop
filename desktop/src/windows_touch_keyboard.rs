@@ -163,13 +163,32 @@ impl WindowsTouchKeyboard {
         }
         self.last_check = Some(now);
         self.initialize().map_err(|error| error.to_string())?;
-        let bounds = unsafe {
+        let bounds = match unsafe {
             self.pane
                 .as_ref()
                 .expect("initialized input pane")
                 .Location()
-        }
-        .map_err(|error| error.to_string())?;
+        } {
+            Ok(bounds) => bounds,
+            Err(error) => {
+                let requested = session.open;
+                let command = self.state.close_after_visibility_error(requested);
+                session.open = self.state.requested;
+                if session.open != requested {
+                    session.status = Some("Teclado visual fechado.".to_owned());
+                }
+                if let Some(target) = command {
+                    if changed {
+                        self.transition_since = Some(now);
+                        self.launched = false;
+                    }
+                    self.request_visibility(target)?;
+                    self.state.command_sent(target);
+                    return Ok(());
+                }
+                return Err(error.to_string());
+            }
+        };
         self.bounds = KeyboardBounds::new(bounds.left, bounds.top, bounds.right, bounds.bottom);
         let visible = self.bounds.is_some();
         let requested = session.open;

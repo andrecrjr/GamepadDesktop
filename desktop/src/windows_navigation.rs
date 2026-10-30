@@ -90,6 +90,13 @@ impl TouchKeyboardState {
         (self.pending.is_none() && self.requested != visible).then_some(self.requested)
     }
 
+    pub(crate) fn close_after_visibility_error(&mut self, requested: bool) -> Option<bool> {
+        if requested || !self.visible {
+            return None;
+        }
+        self.observe(requested, self.visible)
+    }
+
     pub(crate) fn command_sent(&mut self, visible: bool) {
         self.pending = Some(visible);
     }
@@ -360,6 +367,17 @@ mod tests {
         assert!(!keyboard.waiting());
         assert!(keyboard.visible && keyboard.requested);
         assert_eq!(keyboard.observe(true, false), None);
+        assert!(!keyboard.requested);
+    }
+
+    #[test]
+    fn touch_keyboard_can_request_close_from_last_known_visibility() {
+        let mut keyboard = TouchKeyboardState::default();
+        assert_eq!(keyboard.observe(true, false), Some(true));
+        keyboard.command_sent(true);
+        assert_eq!(keyboard.observe(true, true), None);
+
+        assert_eq!(keyboard.close_after_visibility_error(false), Some(false));
         assert!(!keyboard.requested);
     }
 

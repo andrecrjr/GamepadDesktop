@@ -555,17 +555,12 @@ fn update_keyboard_overlay(
     let keyboard_was_open = controller.keyboard.open;
     let presentation_before = controller.keyboard.presentation;
     if let Err(error) = platform.update_keyboard_overlay(&mut controller.keyboard) {
-        let was_open = controller.keyboard.open;
-        controller.keyboard.open = false;
-        if controller.keyboard.presentation != crate::keyboard::KeyboardPresentation::System {
-            controller.keyboard.presentation = crate::keyboard::KeyboardPresentation::Unavailable;
-        }
-        controller.keyboard.status = Some(error);
+        let should_notify = handle_keyboard_overlay_error(controller, error);
         let mut runtime_state = state.lock().expect("runtime state lock");
         runtime_state.keyboard = controller.keyboard.clone();
         let locale = runtime_state.locale;
         drop(runtime_state);
-        if was_open {
+        if should_notify {
             notification_service.send(Notification::KeyboardUnavailable {
                 locale,
                 detail: controller.keyboard.status.clone(),
@@ -586,6 +581,17 @@ fn update_keyboard_overlay(
             controller.keyboard.status = Some(format!("Não foi possível salvar ajustes: {error}"));
         }
     }
+}
+
+fn handle_keyboard_overlay_error(controller: &mut MouseController, error: String) -> bool {
+    let should_notify =
+        controller.keyboard.open && controller.keyboard.status.as_deref() != Some(&error);
+    if controller.keyboard.presentation != crate::keyboard::KeyboardPresentation::System {
+        controller.keyboard.open = false;
+        controller.keyboard.presentation = crate::keyboard::KeyboardPresentation::Unavailable;
+    }
+    controller.keyboard.status = Some(error);
+    should_notify
 }
 
 fn sync_input_tracker<T>(tracker: &mut Option<T>, keyboard_open: bool, create: impl FnOnce() -> T) {
@@ -741,6 +747,39 @@ mod tests {
         assert_eq!(actions, vec![Action::OnScreenKeyboard(true)]);
         assert!(state.keyboard.open);
         assert!(controller.keyboard.open);
+    }
+
+    #[test]
+    fn r3_still_closes_the_system_keyboard_in_both_modes_after_an_error() {
+        let tick = Duration::from_millis(10);
+        let neutral = GamepadFrame::default();
+        for mode in [ControlMode::Desktop, ControlMode::Game] {
+            let mut settings = ControlSettings {
+                mode,
+                ..Default::default()
+            };
+            let mut controller = MouseController::default();
+            controller.update(Some(&neutral), tick, &mut settings);
+            controller.keyboard.open = true;
+            controller.keyboard.presentation = crate::keyboard::KeyboardPresentation::System;
+
+            assert!(handle_keyboard_overlay_error(
+                &mut controller,
+                "temporary visibility error".to_owned()
+            ));
+            assert!(!handle_keyboard_overlay_error(
+                &mut controller,
+                "temporary visibility error".to_owned()
+            ));
+            let mut r3 = neutral;
+            r3.buttons[crate::control::Button::RightStick as usize] = true;
+
+            assert_eq!(
+                controller.update(Some(&r3), tick, &mut settings),
+                vec![Action::OnScreenKeyboard(false)],
+                "mode: {mode:?}"
+            );
+        }
     }
 
     #[test]
