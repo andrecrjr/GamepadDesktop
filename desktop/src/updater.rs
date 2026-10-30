@@ -65,6 +65,91 @@ fn hex_digest(bytes: &[u8]) -> String {
     digest
 }
 
+#[cfg(any(target_os = "windows", target_os = "linux"))]
+fn http_client(timeout: std::time::Duration) -> Result<reqwest::blocking::Client, String> {
+    reqwest::blocking::Client::builder()
+        .user_agent(concat!("Gamepad Desktop/", env!("CARGO_PKG_VERSION")))
+        .timeout(timeout)
+        .build()
+        .map_err(|error| error.to_string())
+}
+
+#[cfg(any(target_os = "windows", target_os = "linux"))]
+fn latest_release(client: &reqwest::blocking::Client) -> Result<GitHubRelease, String> {
+    let response = client
+        .get(RELEASE_API)
+        .header(reqwest::header::ACCEPT, "application/vnd.github+json")
+        .send()
+        .map_err(|error| error.to_string())?;
+    if response.status() == reqwest::StatusCode::NOT_FOUND {
+        return Err("No published release is available yet".to_owned());
+    }
+    response
+        .error_for_status()
+        .map_err(|error| error.to_string())?
+        .json::<GitHubRelease>()
+        .map_err(|error| error.to_string())
+}
+
+#[cfg(any(target_os = "windows", target_os = "linux"))]
+fn download_verified_asset(
+    asset: &GitHubAsset,
+    destination: &std::path::Path,
+    destination_error_prefix: Option<&str>,
+    invalid_digest: &str,
+    digest_mismatch: &str,
+) -> Result<(), String> {
+    use std::{fs::OpenOptions, io::Write, time::Duration};
+
+    let client = http_client(Duration::from_secs(120))?;
+    let mut response = client
+        .get(&asset.browser_download_url)
+        .send()
+        .map_err(|error| error.to_string())?
+        .error_for_status()
+        .map_err(|error| error.to_string())?;
+    let mut file = OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(destination)
+        .map_err(|error| match destination_error_prefix {
+            Some(prefix) => format!("{prefix}: {error}"),
+            None => error.to_string(),
+        })?;
+    std::io::copy(&mut response, &mut file).map_err(|error| error.to_string())?;
+    file.flush().map_err(|error| error.to_string())?;
+    file.sync_all().map_err(|error| error.to_string())?;
+    drop(file);
+
+    let expected = asset
+        .digest
+        .as_deref()
+        .and_then(parse_sha256_digest)
+        .ok_or_else(|| invalid_digest.to_owned())?;
+    if !sha256_file(destination)?.eq_ignore_ascii_case(expected) {
+        return Err(digest_mismatch.to_owned());
+    }
+    Ok(())
+}
+
+#[cfg(any(target_os = "windows", target_os = "linux"))]
+fn sha256_file(path: &std::path::Path) -> Result<String, String> {
+    use sha2::{Digest, Sha256};
+    use std::{fs::File, io::Read};
+
+    let mut file = File::open(path).map_err(|error| error.to_string())?;
+    let mut hasher = Sha256::new();
+    let mut buffer = [0_u8; 64 * 1024];
+    loop {
+        let read = file.read(&mut buffer).map_err(|error| error.to_string())?;
+        if read == 0 {
+            break;
+        }
+        hasher.update(&buffer[..read]);
+    }
+    Ok(hex_digest(hasher.finalize().as_ref()))
+}
+
 #[cfg(any(target_os = "windows", test))]
 fn update_needed(local_digest: &str, release_digest: &str) -> Result<bool, String> {
     let release_digest = parse_sha256_digest(release_digest)
@@ -318,49 +403,18 @@ impl Updater {
 
 #[cfg(target_os = "windows")]
 fn check_for_update() -> Result<(String, Option<UpdateInfo>), String> {
-    use reqwest::blocking::Client;
-    use sha2::{Digest, Sha256};
-    use std::{fs::File, io::Read, time::Duration};
+    use std::time::Duration;
 
-    let mut executable = File::open(std::env::current_exe().map_err(|error| error.to_string())?)
-        .map_err(|error| error.to_string())?;
-    let mut hasher = Sha256::new();
-    let mut buffer = [0_u8; 64 * 1024];
-    loop {
-        let read = executable
-            .read(&mut buffer)
-            .map_err(|error| error.to_string())?;
-        if read == 0 {
-            break;
-        }
-        hasher.update(&buffer[..read]);
-    }
-    let local_digest = hex_digest(hasher.finalize().as_ref());
-    let client = Client::builder()
-        .user_agent(concat!("Gamepad Desktop/", env!("CARGO_PKG_VERSION")))
-        .timeout(Duration::from_secs(30))
-        .build()
-        .map_err(|error| error.to_string())?;
-    let response = client
-        .get(RELEASE_API)
-        .header(reqwest::header::ACCEPT, "application/vnd.github+json")
-        .send()
-        .map_err(|error| error.to_string())?;
-    if response.status() == reqwest::StatusCode::NOT_FOUND {
-        return Err("No published release is available yet".to_owned());
-    }
-    let release = response
-        .error_for_status()
-        .map_err(|error| error.to_string())?
-        .json::<GitHubRelease>()
-        .map_err(|error| error.to_string())?;
+    let executable = std::env::current_exe().map_err(|error| error.to_string())?;
+    let local_digest = sha256_file(&executable)?;
+    let client = http_client(Duration::from_secs(30))?;
+    let release = latest_release(&client)?;
     let tag = release.tag_name.clone();
     Ok((tag, update_asset(release, &local_digest)?))
 }
 
 #[cfg(target_os = "linux")]
 fn check_for_update() -> Result<(String, Option<UpdateInfo>), String> {
-    use reqwest::blocking::Client;
     use std::time::Duration;
 
     let installed_commit = env!("GAMEPAD_DESKTOP_GIT_SHA");
@@ -373,24 +427,8 @@ fn check_for_update() -> Result<(String, Option<UpdateInfo>), String> {
             "This build has no Git commit version; rebuild it from a Git checkout".to_owned(),
         );
     }
-    let client = Client::builder()
-        .user_agent(concat!("Gamepad Desktop/", env!("CARGO_PKG_VERSION")))
-        .timeout(Duration::from_secs(30))
-        .build()
-        .map_err(|error| error.to_string())?;
-    let release = client
-        .get(RELEASE_API)
-        .header(reqwest::header::ACCEPT, "application/vnd.github+json")
-        .send()
-        .map_err(|error| error.to_string())?;
-    if release.status() == reqwest::StatusCode::NOT_FOUND {
-        return Err("No published release is available yet".to_owned());
-    }
-    let release = release
-        .error_for_status()
-        .map_err(|error| error.to_string())?
-        .json::<GitHubRelease>()
-        .map_err(|error| error.to_string())?;
+    let client = http_client(Duration::from_secs(30))?;
+    let release = latest_release(&client)?;
     let tag = release.tag_name.clone();
     let install_kind = linux_install_kind();
     let build_asset = release
@@ -435,13 +473,7 @@ struct GitHubComparison {
 
 #[cfg(target_os = "windows")]
 fn download_and_schedule(update: &UpdateInfo) -> Result<(), String> {
-    use reqwest::blocking::Client;
-    use sha2::{Digest, Sha256};
-    use std::{
-        fs::{self, File, OpenOptions},
-        io::{Read, Write},
-        time::Duration,
-    };
+    use std::fs;
 
     let target = std::env::current_exe().map_err(|error| error.to_string())?;
     let nonce = std::time::SystemTime::now()
@@ -453,49 +485,13 @@ fn download_and_schedule(update: &UpdateInfo) -> Result<(), String> {
         std::process::id()
     ));
     let result = (|| {
-        let client = Client::builder()
-            .user_agent(concat!("Gamepad Desktop/", env!("CARGO_PKG_VERSION")))
-            .timeout(Duration::from_secs(120))
-            .build()
-            .map_err(|error| error.to_string())?;
-        let mut response = client
-            .get(&update.asset.browser_download_url)
-            .send()
-            .map_err(|error| error.to_string())?
-            .error_for_status()
-            .map_err(|error| error.to_string())?;
-        let mut file = OpenOptions::new()
-            .write(true)
-            .create_new(true)
-            .open(&staged)
-            .map_err(|error| format!("Cannot write beside the app: {error}"))?;
-        std::io::copy(&mut response, &mut file).map_err(|error| error.to_string())?;
-        file.flush().map_err(|error| error.to_string())?;
-        file.sync_all().map_err(|error| error.to_string())?;
-        drop(file);
-
-        let expected = update
-            .asset
-            .digest
-            .as_deref()
-            .and_then(parse_sha256_digest)
-            .ok_or_else(|| "The release has no valid executable digest".to_owned())?;
-        let mut staged_file = File::open(&staged).map_err(|error| error.to_string())?;
-        let mut hasher = Sha256::new();
-        let mut buffer = [0_u8; 64 * 1024];
-        loop {
-            let read = staged_file
-                .read(&mut buffer)
-                .map_err(|error| error.to_string())?;
-            if read == 0 {
-                break;
-            }
-            hasher.update(&buffer[..read]);
-        }
-        let actual = hex_digest(hasher.finalize().as_ref());
-        if !actual.eq_ignore_ascii_case(expected) {
-            return Err("The downloaded executable failed its SHA-256 check".to_owned());
-        }
+        download_verified_asset(
+            &update.asset,
+            &staged,
+            Some("Cannot write beside the app"),
+            "The release has no valid executable digest",
+            "The downloaded executable failed its SHA-256 check",
+        )?;
         spawn_update_helper(&target, &staged)
     })();
 
@@ -507,14 +503,10 @@ fn download_and_schedule(update: &UpdateInfo) -> Result<(), String> {
 
 #[cfg(target_os = "linux")]
 fn download_and_schedule(update: &UpdateInfo) -> Result<(), String> {
-    use reqwest::blocking::Client;
-    use sha2::{Digest, Sha256};
     use std::{
-        fs::{self, File, OpenOptions},
-        io::{Read, Write},
+        fs,
         os::unix::fs::PermissionsExt,
         process::{Command, Stdio},
-        time::Duration,
     };
 
     let target = std::env::current_exe().map_err(|error| error.to_string())?;
@@ -542,49 +534,13 @@ fn download_and_schedule(update: &UpdateInfo) -> Result<(), String> {
     ));
 
     let result = (|| {
-        let client = Client::builder()
-            .user_agent(concat!("Gamepad Desktop/", env!("CARGO_PKG_VERSION")))
-            .timeout(Duration::from_secs(120))
-            .build()
-            .map_err(|error| error.to_string())?;
-        let mut response = client
-            .get(&update.asset.browser_download_url)
-            .send()
-            .map_err(|error| error.to_string())?
-            .error_for_status()
-            .map_err(|error| error.to_string())?;
-        let mut file = OpenOptions::new()
-            .write(true)
-            .create_new(true)
-            .open(&archive)
-            .map_err(|error| error.to_string())?;
-        std::io::copy(&mut response, &mut file).map_err(|error| error.to_string())?;
-        file.flush().map_err(|error| error.to_string())?;
-        file.sync_all().map_err(|error| error.to_string())?;
-        drop(file);
-
-        let expected = update
-            .asset
-            .digest
-            .as_deref()
-            .and_then(parse_sha256_digest)
-            .ok_or_else(|| "The Linux release has no valid archive digest".to_owned())?;
-        let mut archive_file = File::open(&archive).map_err(|error| error.to_string())?;
-        let mut hasher = Sha256::new();
-        let mut buffer = [0_u8; 64 * 1024];
-        loop {
-            let read = archive_file
-                .read(&mut buffer)
-                .map_err(|error| error.to_string())?;
-            if read == 0 {
-                break;
-            }
-            hasher.update(&buffer[..read]);
-        }
-        let actual = hex_digest(hasher.finalize().as_ref());
-        if !actual.eq_ignore_ascii_case(expected) {
-            return Err("The downloaded Linux archive failed its SHA-256 check".to_owned());
-        }
+        download_verified_asset(
+            &update.asset,
+            &archive,
+            None,
+            "The Linux release has no valid archive digest",
+            "The downloaded Linux archive failed its SHA-256 check",
+        )?;
 
         if update.asset.name == LINUX_DEB_ASSET {
             install_deb_update(&archive)?;
