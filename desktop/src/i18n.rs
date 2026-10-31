@@ -280,7 +280,13 @@ catalog! {
     ControllerSymbolsHelp => ("Choose symbols for this guide: on Xbox, A is on the bottom and X is on the left; PlayStation Cross (✕) is on the bottom. This does not change your controller mapping.", "Elige los símbolos de esta guía: en Xbox, A está abajo y X a la izquierda; la cruz de PlayStation (✕) está abajo. Esto no cambia la asignación del mando.", "Escolha os símbolos deste guia: no Xbox, A fica embaixo e X à esquerda; a cruz do PlayStation (✕) fica embaixo. Isso não altera o mapeamento do controle.");
     ChooseMode => ("How do you want to use your controller?", "¿Cómo quieres usar el mando?", "Como você quer usar o controle?");
     ResumeGuide => ("Start + Select pauses only Desktop mode. After resuming, release all buttons and center the sticks.", "Start + Select pausa solo el modo escritorio. Al reanudar, suelta los botones y centra los sticks.", "Start + Select pausa apenas o modo Desktop. Ao retomar, solte os botões e centralize os analógicos.");
-    CommandGuide => ("Controller guide", "Guía del mando", "Guia de comandos");
+    Home => ("Home", "Inicio", "Início");
+    Menu => ("Menu", "Menú", "Menu");
+    ConnectionStatus => ("Controller connection", "Conexión del mando", "Conexão do controle");
+    GeneralSettings => ("General", "General", "Geral");
+    ApplicationSettings => ("Application", "Aplicación", "Aplicativo");
+    QuickControls => ("Quick controls", "Controles rápidos", "Comandos rápidos");
+    CommandGuide => ("Controller guide", "Guía del mando", "Guia do controle");
     PointerCommands => ("Mouse and scrolling", "Ratón y desplazamiento", "Mouse e rolagem");
     NavigationCommands => ("Selection and windows", "Selección y ventanas", "Seleção e janelas");
     ScreenshotAndFullscreen => ("Screenshot and fullscreen", "Capturas y pantalla completa", "Captura e tela cheia");

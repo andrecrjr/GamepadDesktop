@@ -5,6 +5,7 @@ use crate::keyboard::{KeyboardKey, KeyboardModifiers, KeyboardSession};
 const REPEAT_INITIAL_DELAY: f64 = 0.4;
 const DIRECTION_REPEAT_INTERVAL: f64 = 0.08;
 const SELECT_DOUBLE_TAP_WINDOW: Duration = Duration::from_millis(400);
+const NEXT_WINDOW_PRESS_GUARD: Duration = Duration::from_millis(32);
 
 pub const MOUSE_SHORTCUTS: &[(&str, &str)] = &[
     (
@@ -218,6 +219,7 @@ pub struct MouseController {
     repeat: [f64; 4],
     system_keyboard_uses_gamepad: bool,
     select_tap_remaining: Option<Duration>,
+    next_window_press_guard: Duration,
     mode: ControlMode,
 }
 
@@ -234,6 +236,7 @@ impl Default for MouseController {
             repeat: [0.0; 4],
             system_keyboard_uses_gamepad: false,
             select_tap_remaining: None,
+            next_window_press_guard: Duration::ZERO,
             mode: ControlMode::Desktop,
         }
     }
@@ -255,6 +258,7 @@ impl MouseController {
         settings: &mut ControlSettings,
     ) -> Vec<Action> {
         let mut actions = Vec::new();
+        self.next_window_press_guard = self.next_window_press_guard.saturating_sub(elapsed);
         let Some(frame) = frame else {
             self.disconnect(&mut actions);
             return actions;
@@ -367,6 +371,7 @@ impl MouseController {
         self.connected = false;
         self.armed = false;
         self.select_tap_remaining = None;
+        self.next_window_press_guard = Duration::ZERO;
         self.previous = GamepadFrame::default();
     }
 
@@ -378,6 +383,7 @@ impl MouseController {
     ) {
         self.mode = mode;
         self.select_tap_remaining = None;
+        self.next_window_press_guard = Duration::ZERO;
         self.close_keyboard(actions);
         self.release(actions);
         self.armed = false;
@@ -477,6 +483,12 @@ impl MouseController {
             let shoulder_chord =
                 start_held && matches!(button, Button::LeftShoulder | Button::RightShoulder);
             if !shoulder_chord && frame.pressed(button) && !self.previous.pressed(button) {
+                if action == Action::NextWindow {
+                    if !self.next_window_press_guard.is_zero() {
+                        continue;
+                    }
+                    self.next_window_press_guard = NEXT_WINDOW_PRESS_GUARD;
+                }
                 actions.push(action);
             }
         }

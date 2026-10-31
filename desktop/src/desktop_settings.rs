@@ -8,7 +8,7 @@ use gamepad_desktop::{
     tray::{PanelControl, TrayMenu},
 };
 
-use super::{DANGER, SharedDesktop, accent_heading, interface_scale};
+use super::{DANGER, SharedDesktop, accent_heading, content_card, interface_scale};
 
 pub(super) fn show(
     ui: &mut egui::Ui,
@@ -20,12 +20,31 @@ pub(super) fn show(
     tray_menu: Option<&TrayMenu>,
 ) {
     accent_heading(ui, state.locale.text(Text::Settings));
-    show_general_settings(ui, state, desktop, tray_menu);
-    show_cursor_scale(ui, state, desktop);
-    show_control_settings(ui, state, desktop);
-    show_keyboard_settings(ui, state, desktop);
-    show_panel_controls(ui, state.locale, tray_error, panel);
-    show_controller_profiles(ui, state, desktop, mapping_text);
+    section(ui, state.locale.text(Text::GeneralSettings), |ui| {
+        show_general_settings(ui, state, desktop, tray_menu);
+    });
+    section(ui, state.locale.text(Text::CursorScale), |ui| {
+        show_cursor_scale(ui, state, desktop);
+    });
+    content_card(ui, |ui| show_control_settings(ui, state, desktop));
+    ui.add_space(10.0);
+    content_card(ui, |ui| show_keyboard_settings(ui, state, desktop));
+    ui.add_space(10.0);
+    section(ui, state.locale.text(Text::ApplicationSettings), |ui| {
+        show_panel_controls(ui, state.locale, tray_error, panel);
+    });
+    content_card(ui, |ui| {
+        show_controller_profiles(ui, state, desktop, mapping_text);
+    });
+}
+
+fn section(ui: &mut egui::Ui, title: &str, contents: impl FnOnce(&mut egui::Ui)) {
+    content_card(ui, |ui| {
+        accent_heading(ui, title);
+        ui.add_space(8.0);
+        contents(ui);
+    });
+    ui.add_space(10.0);
 }
 
 fn show_general_settings(
@@ -98,7 +117,6 @@ fn show_cursor_scale(ui: &mut egui::Ui, state: &mut RuntimeState, desktop: &Shar
             && ui
                 .add(
                     egui::Slider::new(&mut cursor_scale, 100..=max)
-                        .text(locale.text(Text::CursorScale))
                         .suffix("%")
                         .step_by(5.0),
                 )
