@@ -1,6 +1,6 @@
 use std::{env, process::Command};
 
-use crate::cursor_scale::{CursorScale, CursorScaleRange, scaled_size};
+use crate::cursor_scale::{CursorScale, CursorScaleRange, retry_cursor_restore, scaled_size};
 
 // Largest size offered by GNOME Settings.
 const GNOME_MAX_CURSOR_SIZE: u32 = 96;
@@ -106,13 +106,21 @@ impl LinuxCursorScale {
             None => Ok(()),
         }
     }
+
+    fn restore(&mut self) -> Result<(), String> {
+        if !self.modified {
+            return Ok(());
+        }
+        self.apply_size(self.base_size)?;
+        self.current_size = Some(self.base_size);
+        self.modified = false;
+        Ok(())
+    }
 }
 
 impl Drop for LinuxCursorScale {
     fn drop(&mut self) {
-        if self.modified {
-            let _ = self.apply_size(self.base_size);
-        }
+        retry_cursor_restore(|| self.restore());
     }
 }
 

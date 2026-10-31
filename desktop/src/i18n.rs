@@ -354,6 +354,7 @@ catalog! {
     TrayUnavailablePrefix => ("Tray unavailable: ", "Bandeja no disponible: ", "Bandeja indisponível: ");
     ClosePanelKeepsRunning => ("Closing the panel keeps the controller active in the tray near the clock.", "Al cerrar el panel, el mando sigue activo en la bandeja junto al reloj.", "Fechar o painel mantém o controle ativo na bandeja, perto do relógio.");
     QuitApplication => ("Quit application", "Cerrar la aplicación", "Encerrar aplicativo");
+    FinishingCleanup => ("Finishing cleanup before closing…", "Terminando la limpieza antes de cerrar…", "Finalizando a limpeza antes de fechar…");
     ControllerProfiles => ("Controller profiles", "Perfiles de mandos", "Perfis de controles");
     KnownProfiles => ("Known controllers use SDL profiles automatically. For an unknown model, import an SDL mapping line.", "Los mandos conocidos usan perfiles SDL automáticamente. Para un modelo desconocido, importa una línea de mapeo SDL.", "Controles conhecidos usam o perfil SDL automaticamente. Para um modelo desconhecido, importe uma linha de mapeamento SDL.");
     ApplySaveProfile => ("Apply and save profile", "Aplicar y guardar perfil", "Aplicar e salvar perfil");

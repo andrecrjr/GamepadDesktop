@@ -13,7 +13,7 @@ use windows::{
     core::w,
 };
 
-use crate::cursor_scale::{CursorScale, CursorScaleRange, scaled_size};
+use crate::cursor_scale::{CursorScale, CursorScaleRange, retry_cursor_restore, scaled_size};
 
 // Largest mouse pointer size offered by Windows accessibility settings.
 const MAX_CURSOR_SIZE: u32 = 256;
@@ -167,18 +167,25 @@ impl WindowsCursorScale {
         write_cursor_size(size)?;
         apply_system_cursor_size(size)
     }
+
+    fn restore(&mut self) -> Result<(), String> {
+        if !self.modified {
+            return Ok(());
+        }
+        match self.original.as_ref() {
+            Some(value) => write_cursor_size_value(value)?,
+            None => delete_cursor_size()?,
+        }
+        apply_system_cursor_size(self.base_size)?;
+        self.current_size = Some(self.base_size);
+        self.modified = false;
+        Ok(())
+    }
 }
 
 impl Drop for WindowsCursorScale {
     fn drop(&mut self) {
-        if !self.modified {
-            return;
-        }
-        let _ = match self.original.as_ref() {
-            Some(value) => write_cursor_size_value(value),
-            None => delete_cursor_size(),
-        };
-        let _ = apply_system_cursor_size(self.base_size);
+        retry_cursor_restore(|| self.restore());
     }
 }
 

@@ -33,6 +33,7 @@ pub struct RuntimeState {
     pub locale: Locale,
     pub ui_scale: UiScale,
     pub cursor_scale: CursorScale,
+    pub cursor_scale_customized: Option<bool>,
     pub cursor_scale_range: CursorScaleRange,
     pub cursor_scale_error: Option<String>,
     pub settings: ControlSettings,
@@ -90,6 +91,7 @@ impl Default for DesktopRuntime {
             locale: preferences.locale,
             ui_scale: preferences.ui_scale,
             cursor_scale: preferences.cursor_scale,
+            cursor_scale_customized: preferences.cursor_scale_customized,
             settings: preferences.controls,
             start_on_login: preferences.start_on_login,
             onboarding_completed: preferences.onboarding_completed,
@@ -129,6 +131,15 @@ impl Default for DesktopRuntime {
 }
 
 impl DesktopRuntime {
+    pub fn begin_shutdown(&self) {
+        self.stop.store(true, Ordering::Relaxed);
+    }
+
+    /// Returns true after the worker stops and releases its owned resources.
+    pub fn shutdown_complete(&self) -> bool {
+        self.worker.as_ref().is_none_or(JoinHandle::is_finished)
+    }
+
     pub fn reopen_onboarding(&self) {
         self.state.lock().expect("runtime state lock").onboarding = Some(Onboarding::default());
     }
@@ -195,7 +206,9 @@ impl DesktopRuntime {
     }
 
     pub fn configure_cursor_scale(&self, percent: u16) {
-        self.state.lock().expect("runtime state lock").cursor_scale = CursorScale::new(percent);
+        let mut state = self.state.lock().expect("runtime state lock");
+        state.cursor_scale = CursorScale::new(percent);
+        state.cursor_scale_customized = Some(true);
     }
 
     pub fn configure_keyboard(&self, settings: KeyboardSettings) {
@@ -218,6 +231,7 @@ impl DesktopRuntime {
             locale: state.locale,
             ui_scale: state.ui_scale,
             cursor_scale: state.cursor_scale,
+            cursor_scale_customized: state.cursor_scale_customized,
             controls: state.settings,
             start_on_login: state.start_on_login,
             onboarding_completed: state.onboarding_completed,
@@ -255,7 +269,7 @@ impl DesktopRuntime {
 
 impl Drop for DesktopRuntime {
     fn drop(&mut self) {
-        self.stop.store(true, Ordering::Relaxed);
+        self.begin_shutdown();
         if let Some(worker) = self.worker.take() {
             let _ = worker.join();
         }
@@ -310,6 +324,7 @@ impl PreferencePersistence {
                 locale: state.locale,
                 ui_scale: state.ui_scale,
                 cursor_scale: state.cursor_scale,
+                cursor_scale_customized: state.cursor_scale_customized,
                 controls: state.settings,
                 start_on_login: state.start_on_login,
                 onboarding_completed: state.onboarding_completed,

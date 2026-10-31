@@ -179,6 +179,7 @@ struct GamepadDesktopApp {
     tray_menu: Option<TrayMenu>,
     mapping_text: String,
     page: AppPage,
+    shutdown_started: bool,
     #[cfg(any(target_os = "windows", target_os = "linux"))]
     updater: Updater,
 }
@@ -197,6 +198,7 @@ impl GamepadDesktopApp {
             tray_menu,
             mapping_text: String::new(),
             page: AppPage::default(),
+            shutdown_started: false,
             #[cfg(any(target_os = "windows", target_os = "linux"))]
             updater: Updater::default(),
         }
@@ -274,8 +276,38 @@ impl eframe::App for GamepadDesktopApp {
     }
 
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
-        handle_panel_close(ui.ctx(), &self.panel, self.tray_error.is_none());
-        ui.ctx().request_repaint_after(UI_REPAINT_INTERVAL);
+        let context = ui.ctx();
+        context.request_repaint_after(UI_REPAINT_INTERVAL);
+        let desktop = Arc::clone(&self.desktop);
+        let shutdown_complete = desktop
+            .lock()
+            .expect("desktop runtime lock")
+            .shutdown_complete();
+        let close = handle_shutdown_close(
+            context,
+            self.panel.exiting() || self.tray_error.is_some(),
+            &mut self.shutdown_started,
+            shutdown_complete,
+            || {
+                desktop
+                    .lock()
+                    .expect("desktop runtime lock")
+                    .begin_shutdown();
+            },
+        );
+        if close == ShutdownClose::Waiting || close == ShutdownClose::Allowed {
+            let locale = self
+                .desktop
+                .lock()
+                .expect("desktop runtime lock")
+                .state()
+                .locale;
+            show_shutdown_pending(ui, locale.text(Text::FinishingCleanup));
+            return;
+        }
+        if close == ShutdownClose::Idle {
+            handle_panel_close(context, &self.panel, self.tray_error.is_none());
+        }
         self.desktop
             .lock()
             .expect("desktop runtime lock")
@@ -554,6 +586,53 @@ fn show_desktop_settings(
         panel,
         tray_menu,
     );
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum ShutdownClose {
+    Idle,
+    Waiting,
+    Allowed,
+}
+
+fn handle_shutdown_close(
+    context: &egui::Context,
+    should_exit: bool,
+    shutdown_started: &mut bool,
+    shutdown_complete: bool,
+    begin_shutdown: impl FnOnce(),
+) -> ShutdownClose {
+    let close_requested = context.input(|input| input.viewport().close_requested());
+    if !*shutdown_started {
+        if !should_exit || !close_requested {
+            return ShutdownClose::Idle;
+        }
+        *shutdown_started = true;
+        begin_shutdown();
+    }
+
+    if !shutdown_complete {
+        if close_requested {
+            context.send_viewport_cmd(egui::ViewportCommand::CancelClose);
+        }
+        ShutdownClose::Waiting
+    } else if close_requested {
+        ShutdownClose::Allowed
+    } else {
+        context.send_viewport_cmd(egui::ViewportCommand::Close);
+        ShutdownClose::Waiting
+    }
+}
+
+fn show_shutdown_pending(ui: &mut egui::Ui, message: &str) {
+    egui::CentralPanel::default().show(ui, |ui| {
+        ui.centered_and_justified(|ui| {
+            ui.horizontal(|ui| {
+                ui.spinner();
+                ui.label(message);
+            });
+        });
+    });
 }
 
 fn handle_panel_close(context: &egui::Context, panel: &PanelControl, tray_available: bool) {
@@ -853,6 +932,20 @@ fn acquire_instance_lock_at(path: &std::path::Path) -> std::io::Result<Option<st
     }
 }
 
+fn wait_for_desktop_shutdown(desktop: &SharedDesktop) {
+    desktop
+        .lock()
+        .expect("desktop runtime lock")
+        .begin_shutdown();
+    while !desktop
+        .lock()
+        .expect("desktop runtime lock")
+        .shutdown_complete()
+    {
+        std::thread::sleep(UI_REPAINT_INTERVAL);
+    }
+}
+
 fn main() -> eframe::Result {
     let background_start = std::env::args_os().any(|argument| argument == "--background");
     #[cfg(any(target_os = "linux", target_os = "windows"))]
@@ -906,11 +999,15 @@ fn main() -> eframe::Result {
         )?;
         panel.attach(None);
         if panel.exiting() || tray.is_err() || cfg!(target_os = "windows") {
+            wait_for_desktop_shutdown(&desktop);
             break;
         }
         match actions.recv() {
             Ok(TrayAction::Open) => {}
-            Ok(TrayAction::Exit) | Err(_) => break,
+            Ok(TrayAction::Exit) | Err(_) => {
+                wait_for_desktop_shutdown(&desktop);
+                break;
+            }
         }
     }
     Ok(())
@@ -1005,6 +1102,78 @@ mod tests {
                 .any(|command| matches!(command, egui::ViewportCommand::CancelClose))
         );
         assert_eq!(actions.try_recv().unwrap(), TrayAction::Exit);
+    }
+
+    #[test]
+    fn shutdown_closes_only_after_async_cleanup_finishes() {
+        let context = egui::Context::default();
+        let mut shutdown_started = false;
+        let mut shutdown_requests = 0;
+        let mut input = egui::RawInput::default();
+        input
+            .viewports
+            .get_mut(&egui::ViewportId::ROOT)
+            .unwrap()
+            .events
+            .push(egui::ViewportEvent::Close);
+        let mut output = context.run_pass(input, |context| {
+            assert_eq!(
+                handle_shutdown_close(context, true, &mut shutdown_started, false, || {
+                    shutdown_requests += 1;
+                }),
+                ShutdownClose::Waiting
+            );
+        });
+        output.textures_delta.clear();
+        assert!(shutdown_started);
+        assert_eq!(shutdown_requests, 1);
+        assert!(
+            output.viewport_output[&egui::ViewportId::ROOT]
+                .commands
+                .iter()
+                .any(|command| matches!(command, egui::ViewportCommand::CancelClose))
+        );
+
+        let mut output = context.run_pass(egui::RawInput::default(), |context| {
+            assert_eq!(
+                handle_shutdown_close(context, true, &mut shutdown_started, true, || {
+                    shutdown_requests += 1;
+                }),
+                ShutdownClose::Waiting
+            );
+        });
+        output.textures_delta.clear();
+        assert_eq!(shutdown_requests, 1);
+        assert!(
+            output.viewport_output[&egui::ViewportId::ROOT]
+                .commands
+                .iter()
+                .any(|command| matches!(command, egui::ViewportCommand::Close))
+        );
+    }
+
+    #[test]
+    fn close_to_tray_does_not_start_runtime_shutdown() {
+        let mut input = egui::RawInput::default();
+        input
+            .viewports
+            .get_mut(&egui::ViewportId::ROOT)
+            .unwrap()
+            .events
+            .push(egui::ViewportEvent::Close);
+        let mut shutdown_started = false;
+        let mut shutdown_requests = 0;
+        let mut output = egui::Context::default().run_pass(input, |context| {
+            assert_eq!(
+                handle_shutdown_close(context, false, &mut shutdown_started, false, || {
+                    shutdown_requests += 1;
+                }),
+                ShutdownClose::Idle
+            );
+        });
+        output.textures_delta.clear();
+        assert!(!shutdown_started);
+        assert_eq!(shutdown_requests, 0);
     }
 
     #[cfg(target_os = "linux")]

@@ -14,7 +14,7 @@ use crate::windows_navigation::{
 use crate::windows_touch_keyboard::WindowsTouchKeyboard;
 #[path = "windows_cursor_scale.rs"]
 mod windows_cursor_scale;
-use crate::cursor_scale::{CursorScale, CursorScaleRange};
+use crate::cursor_scale::{CursorScale, CursorScaleRange, retry_cursor_restore};
 use windows::{
     Win32::{
         Foundation::{CloseHandle, HWND, LPARAM, POINT},
@@ -520,6 +520,11 @@ impl Platform {
 impl Drop for Platform {
     fn drop(&mut self) {
         let _ = self.update_mouse_mode(true, false);
+        retry_cursor_restore(|| {
+            self.paused_cursor
+                .sync(true, false, set_cursor_hidden)
+                .map_err(|error| format!("Falha restaurando cursor do Windows: {error}"))
+        });
         let _ = self.input.button(enigo::Button::Left, Direction::Release);
         let _ = self.input.button(enigo::Button::Right, Direction::Release);
     }

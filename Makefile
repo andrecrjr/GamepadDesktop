@@ -106,6 +106,7 @@ desktop-windows:
 	PATH="$(if $(MINGW_BIN),$(MINGW_BIN):)$$PATH" $(CARGO) build --manifest-path $(DESKTOP_MANIFEST) --release --target $(WINDOWS_TARGET)
 	mkdir -p $(DESKTOP_DIST_DIR)
 	cp $(WINDOWS_BINARY) $(WINDOWS_RELEASE_BINARY)
+	PATH="$(if $(MINGW_BIN),$(MINGW_BIN):)$$PATH" x86_64-w64-mingw32-strip --strip-all $(WINDOWS_RELEASE_BINARY)
 	rm -f $(DESKTOP_DIST_DIR)/GamepadDesktop-Windows-x64.zip
 
 desktop-clean-dist:

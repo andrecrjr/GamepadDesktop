@@ -1,6 +1,16 @@
+use std::time::Duration;
+
 use serde::{Deserialize, Serialize};
 
 pub const MIN_CURSOR_SCALE: u16 = 100;
+pub(crate) const LEGACY_DEFAULT_CURSOR_SCALE: u16 = 135;
+const CURSOR_RESTORE_RETRY_INTERVAL: Duration = Duration::from_millis(100);
+
+pub(crate) fn retry_cursor_restore<E>(mut restore: impl FnMut() -> Result<(), E>) {
+    while restore().is_err() {
+        std::thread::sleep(CURSOR_RESTORE_RETRY_INTERVAL);
+    }
+}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(transparent)]
@@ -22,7 +32,7 @@ impl CursorScale {
 
 impl Default for CursorScale {
     fn default() -> Self {
-        Self(135)
+        Self(MIN_CURSOR_SCALE)
     }
 }
 
@@ -96,5 +106,20 @@ mod tests {
     fn cursor_scale_never_goes_below_100_percent() {
         assert_eq!(CursorScale::new(0).percent(), 100);
         assert_eq!(CursorScale::new(135).percent(), 135);
+    }
+
+    #[test]
+    fn cursor_restore_retries_until_success() {
+        let mut attempts = 0;
+        super::retry_cursor_restore(|| {
+            attempts += 1;
+            if attempts == 1 {
+                Err("temporary restore failure")
+            } else {
+                Ok(())
+            }
+        });
+
+        assert_eq!(attempts, 2);
     }
 }
