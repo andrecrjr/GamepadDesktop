@@ -53,6 +53,8 @@ pub const MOUSE_SHORTCUTS: &[(&str, &str)] = &[
         "Alternar entre Desktop e Jogo",
     ),
     ("Select/Back + R3 · modo Jogo", "Abrir / fechar teclado"),
+    ("Start/Menu + LB/L1", "Print Screen · iniciar captura"),
+    ("Start/Menu + RB/R1", "F11 · tela cheia"),
 ];
 
 pub const KEYBOARD_SHORTCUTS: &[(&str, &str)] = &[
@@ -181,6 +183,7 @@ pub enum DpadDirection {
 pub enum KeyboardInput {
     Character(char),
     Function(u8),
+    PrintScreen,
     Backspace,
     Enter,
     Escape,
@@ -452,6 +455,18 @@ impl MouseController {
                 self.held[index] = pressed;
             }
         }
+        let start_held = frame.pressed(Button::Start);
+        let left_shoulder_pressed =
+            frame.pressed(Button::LeftShoulder) && !self.previous.pressed(Button::LeftShoulder);
+        let right_shoulder_pressed =
+            frame.pressed(Button::RightShoulder) && !self.previous.pressed(Button::RightShoulder);
+        if start_held {
+            match (left_shoulder_pressed, right_shoulder_pressed) {
+                (true, false) => actions.push(Action::Keyboard(KeyboardInput::PrintScreen)),
+                (false, true) => actions.push(Action::Keyboard(KeyboardInput::Function(11))),
+                _ => {}
+            }
+        }
         for (button, action) in [
             (Button::West, Action::Key(SystemKey::Enter)),
             (Button::North, Action::Key(SystemKey::Escape)),
@@ -459,7 +474,9 @@ impl MouseController {
             (Button::LeftShoulder, Action::Key(SystemKey::Tab)),
             (Button::RightShoulder, Action::NextWindow),
         ] {
-            if frame.pressed(button) && !self.previous.pressed(button) {
+            let shoulder_chord =
+                start_held && matches!(button, Button::LeftShoulder | Button::RightShoulder);
+            if !shoulder_chord && frame.pressed(button) && !self.previous.pressed(button) {
                 actions.push(action);
             }
         }

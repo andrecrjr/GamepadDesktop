@@ -81,7 +81,11 @@ pub fn show(ui: &mut egui::Ui, state: &RuntimeState) -> Option<Command> {
                 let family = gamepad_icons::family(ui.ctx());
                 gamepad_icons::show_shortcut_icons(ui, family, "LB / L1");
                 gamepad_icons::show_shortcut_icons(ui, family, "RB / R1");
-                ui.small(locale.text(Text::TourNavigation));
+                ui.small(locale.text(match tour.step {
+                    Step::WindowSwitcher => Text::TourNavigationWindowSwitcher,
+                    Step::DesktopShortcuts => Text::TourNavigationDesktopShortcuts,
+                    _ => Text::TourNavigation,
+                }));
             });
         });
     egui::CentralPanel::default().show(ui, |ui| {
@@ -362,6 +366,11 @@ fn lesson_copy(step: Step) -> (Text, Text) {
         Step::CloseKeyboard => (Text::TourCloseKeyboard, Text::TourCloseKeyboardCopy),
         Step::Game => (Text::TourGame, Text::TourGameCopy),
         Step::Desktop => (Text::TourDesktop, Text::TourDesktopCopy),
+        Step::WindowSwitcher => (Text::TourWindowSwitcher, Text::TourWindowSwitcherCopy),
+        Step::DesktopShortcuts => (
+            Text::ScreenshotAndFullscreen,
+            Text::TourDesktopShortcutsCopy,
+        ),
         Step::Pause => (Text::TourPause, Text::TourPauseCopy),
         Step::Ready => (Text::TourReady, Text::TourReadyCopy),
     }
@@ -375,7 +384,10 @@ fn shortcut(ui: &mut egui::Ui, step: Step, locale: Locale) {
         Step::Drag => &[4, 2],
         Step::Scroll => &[3],
         Step::OpenKeyboard | Step::CloseKeyboard => &[0],
-        Step::Game | Step::Desktop => &[12],
+        Step::Game => &[12],
+        Step::Desktop => &[12],
+        Step::WindowSwitcher => &[10, 6, 7],
+        Step::DesktopShortcuts => &[14, 15],
         Step::Pause => &[11],
         _ => &[],
     };
@@ -389,6 +401,21 @@ fn shortcut(ui: &mut egui::Ui, step: Step, locale: Locale) {
             ] {
                 gamepad_icons::show_shortcut_icons(ui, family, label);
                 ui.label(locale.translate(label));
+            }
+        } else if step == Step::DesktopShortcuts {
+            for &index in indices {
+                gamepad_icons::show_shortcut_icons(ui, family, "Start / Menu / +");
+                gamepad_icons::show_shortcut_icons(
+                    ui,
+                    family,
+                    if index == 14 { "LB / L1" } else { "RB / R1" },
+                );
+                let (button, _) = MOUSE_SHORTCUTS[index];
+                ui.label(
+                    RichText::new(locale.translate(button))
+                        .strong()
+                        .color(ACCENT),
+                );
             }
         } else {
             for &index in indices {
@@ -475,7 +502,9 @@ fn controller_diagram(ui: &mut egui::Ui, step: Step) {
             y,
             icon,
             (y == 0.56 && matches!(step, Step::Click | Step::Drag | Step::Type))
-                || (y == 0.43 && x == 0.85 && step == Step::RightClick),
+                || (y == 0.43 && x == 0.85 && step == Step::RightClick)
+                || (step == Step::WindowSwitcher
+                    && ((y == 0.43 && x == 0.67) || (y == 0.30 && x == 0.76))),
             18.0,
         );
     }
@@ -486,7 +515,13 @@ fn controller_diagram(ui: &mut egui::Ui, step: Step) {
         matches!(step, Step::Game | Step::Desktop | Step::Pause),
         18.0,
     );
-    button(0.55, 0.4, Icon::Menu, step == Step::Pause, 18.0);
+    button(
+        0.55,
+        0.4,
+        Icon::Menu,
+        matches!(step, Step::Pause | Step::DesktopShortcuts),
+        18.0,
+    );
 }
 
 fn scene(ui: &mut egui::Ui, tour: &Onboarding, locale: Locale) {
@@ -497,7 +532,11 @@ fn scene(ui: &mut egui::Ui, tour: &Onboarding, locale: Locale) {
     painter.text(
         rect.min + Vec2::new(14.0, 17.0),
         Align2::LEFT_CENTER,
-        locale.text(Text::TourPracticeDesktop),
+        locale.text(match tour.step {
+            Step::WindowSwitcher => Text::TourWindowSwitcher,
+            Step::DesktopShortcuts => Text::TourShortcutPreview,
+            _ => Text::TourPracticeDesktop,
+        }),
         FontId::proportional(11.0),
         MUTED_TEXT,
     );
@@ -654,6 +693,120 @@ fn scene(ui: &mut egui::Ui, tour: &Onboarding, locale: Locale) {
                 );
             }
         }
+        Step::WindowSwitcher => {
+            let gap = 8.0;
+            let card_width = (content.width() - gap * 2.0) / 3.0;
+            let card_height = 96.0;
+            let top = content.center().y - card_height / 2.0;
+            for index in 0..3 {
+                let selected = tour.window_switcher_preview() == Some(index);
+                let card = Rect::from_min_size(
+                    Pos2::new(content.left() + index as f32 * (card_width + gap), top),
+                    Vec2::new(card_width, card_height),
+                );
+                painter.rect_filled(
+                    card,
+                    8.0,
+                    if selected {
+                        Color32::from_rgb(28, 83, 77)
+                    } else {
+                        CARD_BACKGROUND
+                    },
+                );
+                painter.rect_stroke(
+                    card,
+                    8.0,
+                    Stroke::new(
+                        if selected { 2.0 } else { 1.0 },
+                        if selected { ACCENT } else { BORDER },
+                    ),
+                    StrokeKind::Inside,
+                );
+                let title_bar = Rect::from_min_size(card.min, Vec2::new(card.width(), 17.0));
+                painter.rect_filled(title_bar, 7.0, BORDER);
+                painter.circle_filled(
+                    title_bar.left_center() + Vec2::new(9.0, 0.0),
+                    2.0,
+                    if selected { ACCENT } else { MUTED_TEXT },
+                );
+                let left = card.left() + 10.0;
+                let body_top = title_bar.bottom() + 10.0;
+                painter.rect_filled(
+                    Rect::from_min_size(Pos2::new(left, body_top), Vec2::splat(15.0)),
+                    3.0,
+                    if selected { ACCENT } else { BORDER },
+                );
+                for row in 0..3 {
+                    let width = card.width() * [0.48, 0.68, 0.38][row];
+                    painter.rect_filled(
+                        Rect::from_min_size(
+                            Pos2::new(left + 22.0, body_top + row as f32 * 8.0 + 2.0),
+                            Vec2::new(width, 3.0),
+                        ),
+                        2.0,
+                        MUTED_TEXT,
+                    );
+                }
+            }
+        }
+        Step::DesktopShortcuts => {
+            let gap = 8.0;
+            let height = (content.height() - gap) / 2.0;
+            for (row, (index, label)) in [
+                (14, Text::PrintScreenShortcut),
+                (15, Text::FullscreenShortcut),
+            ]
+            .into_iter()
+            .enumerate()
+            {
+                let card = Rect::from_min_size(
+                    Pos2::new(content.left(), content.top() + row as f32 * (height + gap)),
+                    Vec2::new(content.width(), height),
+                );
+                let active = matches!(
+                    (index, tour.shortcut_preview()),
+                    (
+                        14,
+                        Some(gamepad_desktop::control::KeyboardInput::PrintScreen)
+                    ) | (
+                        15,
+                        Some(gamepad_desktop::control::KeyboardInput::Function(11))
+                    )
+                );
+                painter.rect_filled(
+                    card,
+                    8.0,
+                    if active {
+                        Color32::from_rgb(28, 83, 77)
+                    } else {
+                        CARD_BACKGROUND
+                    },
+                );
+                painter.rect_stroke(
+                    card,
+                    8.0,
+                    Stroke::new(
+                        if active { 2.0 } else { 1.0 },
+                        if active { ACCENT } else { BORDER },
+                    ),
+                    StrokeKind::Inside,
+                );
+                painter.text(
+                    card.min + Vec2::new(12.0, 20.0),
+                    Align2::LEFT_CENTER,
+                    locale.translate(MOUSE_SHORTCUTS[index].0),
+                    FontId::proportional(11.0),
+                    if active { ACCENT } else { MUTED_TEXT },
+                );
+                painter.text(
+                    card.min + Vec2::new(12.0, 48.0),
+                    Align2::LEFT_CENTER,
+                    locale.text(label),
+                    FontId::proportional(13.0),
+                    TEXT,
+                );
+            }
+        }
         _ => {
             let settings = tour.practice_settings();
             let color = if settings.mode == ControlMode::Game {
@@ -707,6 +860,53 @@ fn scene(ui: &mut egui::Ui, tour: &Onboarding, locale: Locale) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn desktop_return_lesson_stays_focused_on_one_action_in_all_languages() {
+        for locale in Locale::ALL {
+            let copy = locale.text(Text::TourDesktopCopy);
+            assert!(
+                copy.split_whitespace().count() <= 14,
+                "desktop return lesson is too dense in {locale:?}: {copy}"
+            );
+            assert!(
+                !["Alt+Tab", "Print Screen", "F11", "X/□", "Y/△"]
+                    .iter()
+                    .any(|command| copy.contains(command)),
+                "desktop return lesson mixes in another shortcut in {locale:?}: {copy}"
+            );
+        }
+    }
+
+    #[test]
+    fn window_switcher_lesson_explains_controls_and_navigation_in_all_languages() {
+        for locale in Locale::ALL {
+            let copy = locale.text(Text::TourWindowSwitcherCopy);
+            for control in ["R1", "Alt+Tab", "X/□", "Y/△", "A/✕"] {
+                assert!(
+                    copy.contains(control),
+                    "missing {control} in {locale:?}: {copy}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn desktop_shortcut_lesson_explains_both_combinations_in_all_languages() {
+        for (locale, print_screen) in [
+            (Locale::English, "Print Screen"),
+            (Locale::Spanish, "Impr Pant"),
+            (Locale::PortugueseBrazil, "Print Screen"),
+        ] {
+            let copy = locale.text(Text::TourDesktopShortcutsCopy);
+            for control in ["Start/Menu", "LB/L1", "RB/R1", "F11", print_screen] {
+                assert!(
+                    copy.contains(control),
+                    "missing {control} in {locale:?}: {copy}"
+                );
+            }
+        }
+    }
 
     #[test]
     fn controller_symbols_help_explains_button_positions_in_all_languages() {

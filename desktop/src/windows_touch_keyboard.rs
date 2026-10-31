@@ -23,7 +23,7 @@ use windows::{
 
 use crate::{
     keyboard::KeyboardSession,
-    windows_navigation::{KeyboardBounds, TouchKeyboardState},
+    windows_navigation::{KeyboardBounds, TouchKeyboardState, should_toggle_system_keyboard},
 };
 
 // ITipInvocation is the internal touch-keyboard launcher used by desktop
@@ -101,20 +101,14 @@ impl WindowsTouchKeyboard {
                 view.TryShowWithKind(CoreInputViewKind::Gamepad)
                     .unwrap_or(false)
             });
-            if !self.gamepad_view_active {
-                Self::toggle().map_err(|error| error.to_string())?;
-            }
-        } else if self.gamepad_view_active {
-            let hidden = self
-                .core_input_view
-                .as_ref()
-                .is_some_and(|view| view.TryHide().unwrap_or(false));
-            if !hidden {
-                Self::toggle().map_err(|error| error.to_string())?;
-            }
-            self.gamepad_view_active = false;
-        } else {
+        }
+        if should_toggle_system_keyboard(visible, self.gamepad_view_active) {
+            // CoreInputView is tied to this app's window; the desktop keyboard
+            // must be dismissed through the system for another foreground app.
             Self::toggle().map_err(|error| error.to_string())?;
+        }
+        if !visible {
+            self.gamepad_view_active = false;
         }
         Ok(())
     }

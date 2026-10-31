@@ -16,6 +16,7 @@ use crate::{
     cursor_scale::{CursorScale, CursorScaleRange},
     keyboard::{KeyboardModifiers, KeyboardPresentation, KeyboardSession},
     wayland_keyboard::WaylandKeyboardOverlay,
+    window_switcher::{WindowSwitcherState, WindowSwitcherStep},
 };
 
 #[cfg(test)]
@@ -30,6 +31,7 @@ pub struct Platform {
     keyboard_presentation: KeyboardPresentation,
     keyboard_overlay_error: Option<String>,
     cursor_scale: LinuxCursorScale,
+    window_switcher: WindowSwitcherState,
 }
 
 impl Platform {
@@ -82,6 +84,7 @@ impl Platform {
                 keyboard_presentation,
                 keyboard_overlay_error,
                 cursor_scale: LinuxCursorScale::new(),
+                window_switcher: WindowSwitcherState::default(),
             })
         };
         create().map_err(|error| format!("Não foi possível criar mouse/teclado virtual em /dev/uinput: {error}. Verifique as permissões da sua sessão."))
@@ -109,7 +112,14 @@ impl Platform {
         self.cursor_scale.set(scale).map(|_| ())
     }
 
-    pub(crate) fn update_mouse_mode(&mut self, _: bool, _: bool) -> Result<(), String> {
+    pub(crate) fn update_mouse_mode(
+        &mut self,
+        enabled: bool,
+        connected: bool,
+    ) -> Result<(), String> {
+        if !enabled || !connected {
+            self.finish_window_switcher(true)?;
+        }
         Ok(())
     }
 
@@ -149,6 +159,19 @@ impl Platform {
     }
 
     pub fn apply(&mut self, action: Action) -> Result<(), String> {
+        if self.window_switcher.is_open() {
+            match action {
+                Action::Key(SystemKey::Enter) => {
+                    self.finish_window_switcher(false)?;
+                    return Ok(());
+                }
+                Action::Key(SystemKey::Escape) => {
+                    self.finish_window_switcher(true)?;
+                    return Ok(());
+                }
+                _ => {}
+            }
+        }
         let key_event = |key: KeyCode, value| InputEvent::new(EventType::KEY.0, key.0, value);
         let result = match action {
             Action::OnScreenKeyboard(_) => return Ok(()),
@@ -196,18 +219,44 @@ impl Platform {
             }
             Action::KeyboardChord(input, modifiers) => self.emit_keyboard_input(input, modifiers),
             Action::NextWindow => {
-                let press = self.keyboard.emit(&[
-                    key_event(KeyCode::KEY_LEFTALT, 1),
-                    key_event(KeyCode::KEY_TAB, 1),
-                ]);
-                let release = self.keyboard.emit(&[
-                    key_event(KeyCode::KEY_TAB, 0),
-                    key_event(KeyCode::KEY_LEFTALT, 0),
-                ]);
-                press.and(release)
+                let step = self.window_switcher.next();
+                let modifier = if step == WindowSwitcherStep::Open {
+                    let result = self.keyboard.emit(&[key_event(KeyCode::KEY_LEFTALT, 1)]);
+                    if result.is_err() {
+                        self.window_switcher.finish();
+                    }
+                    result
+                } else {
+                    Ok(())
+                };
+                if modifier.is_ok() {
+                    self.emit_key(KeyCode::KEY_TAB)
+                } else {
+                    modifier
+                }
             }
         };
         result.map_err(|error| format!("Erro enviando entrada ao desktop: {error}"))
+    }
+
+    fn finish_window_switcher(&mut self, cancel: bool) -> Result<(), String> {
+        if !self.window_switcher.is_open() {
+            return Ok(());
+        }
+        let cancel_result = if cancel {
+            self.emit_key(KeyCode::KEY_ESC)
+        } else {
+            Ok(())
+        };
+        let release =
+            self.keyboard
+                .emit(&[InputEvent::new(EventType::KEY.0, KeyCode::KEY_LEFTALT.0, 0)]);
+        if release.is_ok() {
+            self.window_switcher.finish();
+        }
+        cancel_result
+            .and(release)
+            .map_err(|error| error.to_string())
     }
 
     fn emit_key(&mut self, key: KeyCode) -> std::io::Result<()> {
@@ -243,6 +292,7 @@ impl Platform {
                 },
                 false,
             ),
+            KeyboardInput::PrintScreen => (KeyCode::KEY_SYSRQ, false),
             KeyboardInput::Backspace => (KeyCode::KEY_BACKSPACE, false),
             KeyboardInput::Enter => (KeyCode::KEY_ENTER, false),
             KeyboardInput::Escape => (KeyCode::KEY_ESC, false),
@@ -270,6 +320,12 @@ impl Platform {
             .chain(modifiers.iter().rev().copied().map(release))
             .collect();
         self.keyboard.emit(&events)
+    }
+}
+
+impl Drop for Platform {
+    fn drop(&mut self) {
+        let _ = self.finish_window_switcher(true);
     }
 }
 

@@ -123,6 +123,8 @@ fn every_practice_has_a_working_demo_without_hardware() {
         Step::CloseKeyboard,
         Step::Game,
         Step::Desktop,
+        Step::WindowSwitcher,
+        Step::DesktopShortcuts,
         Step::Pause,
     ] {
         let mut tour = at(step);

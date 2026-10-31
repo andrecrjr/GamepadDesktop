@@ -439,6 +439,9 @@ fn show_desktop_overview(ui: &mut egui::Ui, state: &RuntimeState) {
             ui.strong(locale.text(Text::NavigationCommands));
             shortcut_guide(ui, locale, &MOUSE_SHORTCUTS[6..11]);
             shortcut_guide(ui, locale, &MOUSE_SHORTCUTS[1..2]);
+            ui.add_space(10.0);
+            ui.strong(locale.text(Text::ScreenshotAndFullscreen));
+            shortcut_guide(ui, locale, &MOUSE_SHORTCUTS[14..16]);
         });
     egui::CollapsingHeader::new(locale.text(Text::KeyboardCommands))
         .default_open(state.keyboard.open)
@@ -701,7 +704,25 @@ fn shortcut_guide(ui: &mut egui::Ui, locale: Locale, shortcuts: &[(&str, &str)])
                     .inner_margin(egui::Margin::symmetric(7, 3))
                     .show(ui, |ui| {
                         ui.horizontal_wrapped(|ui| {
-                            gamepad_icons::show_shortcut_icons(ui, family, source_button);
+                            match source_button {
+                                "Start/Menu + LB/L1" => {
+                                    gamepad_icons::show_shortcut_icons(
+                                        ui,
+                                        family,
+                                        "Start / Menu / +",
+                                    );
+                                    gamepad_icons::show_shortcut_icons(ui, family, "LB / L1");
+                                }
+                                "Start/Menu + RB/R1" => {
+                                    gamepad_icons::show_shortcut_icons(
+                                        ui,
+                                        family,
+                                        "Start / Menu / +",
+                                    );
+                                    gamepad_icons::show_shortcut_icons(ui, family, "RB / R1");
+                                }
+                                _ => gamepad_icons::show_shortcut_icons(ui, family, source_button),
+                            }
                             ui.label(RichText::new(button).strong().color(ACCENT));
                         });
                     });

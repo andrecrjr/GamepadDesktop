@@ -46,7 +46,9 @@ Configurações de versões anteriores continuam válidas e recebem o roteiro um
 | Botão superior — Y / △ / X no Switch | Escape                                                       |
 | L3                                   | Abrir o lançador do sistema                                  |
 | LB / L1                              | Tab                                                          |
-| RB / R1                              | Alt+Tab                                                      |
+| RB / R1                              | Abre o seletor Alt+Tab; R1 avança; X confirma; Y cancela     |
+| Segure Start/Menu + LB / L1          | Print Screen · inicia a captura do sistema                  |
+| Segure Start/Menu + RB / R1          | F11 · alternar tela cheia                                   |
 | R3 — pressionar o analógico direito  | Abrir ou fechar o teclado, nos modos Desktop e Jogo           |
 | Start + Select / Menu + View         | Pausar ou retomar; solte os botões e centralize para retomar |
 

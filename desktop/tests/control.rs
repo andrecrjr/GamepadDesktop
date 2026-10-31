@@ -1,9 +1,10 @@
 use std::time::Duration;
 
 use gamepad_desktop::control::{
-    Action, Button, ControlSettings, DpadDirection, GamepadFrame, MouseButton, MouseController,
-    SystemKey,
+    Action, Button, ControlSettings, DpadDirection, GamepadFrame, KeyboardInput, MouseButton,
+    MouseController, SystemKey,
 };
+use gamepad_desktop::i18n::Locale;
 
 const TICK: Duration = Duration::from_millis(10);
 
@@ -18,6 +19,69 @@ fn pressed(button: Button) -> GamepadFrame {
     let mut frame = GamepadFrame::default();
     frame.buttons[button as usize] = true;
     frame
+}
+
+#[test]
+fn start_and_right_shoulder_send_f11_instead_of_alt_tab() {
+    let (mut controller, mut settings) = ready();
+    let start = pressed(Button::Start);
+    assert!(
+        controller
+            .update(Some(&start), TICK, &mut settings)
+            .is_empty()
+    );
+
+    let mut chord = start;
+    chord.buttons[Button::RightShoulder as usize] = true;
+    assert_eq!(
+        controller.update(Some(&chord), TICK, &mut settings),
+        vec![Action::Keyboard(KeyboardInput::Function(11))]
+    );
+}
+
+#[test]
+fn start_and_left_shoulder_send_print_screen_instead_of_tab() {
+    let (mut controller, mut settings) = ready();
+    let start = pressed(Button::Start);
+    assert!(
+        controller
+            .update(Some(&start), TICK, &mut settings)
+            .is_empty()
+    );
+
+    let mut chord = start;
+    chord.buttons[Button::LeftShoulder as usize] = true;
+    assert_eq!(
+        controller.update(Some(&chord), TICK, &mut settings),
+        vec![Action::Keyboard(KeyboardInput::PrintScreen)]
+    );
+}
+
+#[test]
+fn screenshot_and_fullscreen_shortcuts_are_localized() {
+    for (locale, screenshot, fullscreen) in [
+        (
+            Locale::English,
+            "Print Screen · system screenshot",
+            "F11 · toggle fullscreen",
+        ),
+        (
+            Locale::Spanish,
+            "Impr Pant · captura del sistema",
+            "F11 · activar pantalla completa",
+        ),
+        (
+            Locale::PortugueseBrazil,
+            "Print Screen · captura do sistema",
+            "F11 · alternar tela cheia",
+        ),
+    ] {
+        assert_eq!(
+            locale.translate("Print Screen · iniciar captura"),
+            screenshot
+        );
+        assert_eq!(locale.translate("F11 · tela cheia"), fullscreen);
+    }
 }
 
 #[test]

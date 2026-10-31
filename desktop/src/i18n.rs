@@ -55,6 +55,8 @@ impl Locale {
             "Setas · segurar para repetir" => Some(Text::ArrowRepeat),
             "Tab · próximo campo" => Some(Text::NextField),
             "Alt+Tab · alternar janela" => Some(Text::SwitchWindow),
+            "Print Screen · iniciar captura" => Some(Text::PrintScreenShortcut),
+            "F11 · tela cheia" => Some(Text::FullscreenShortcut),
             "Start + Select / Menu + View" => Some(Text::PauseCombo),
             "Pausar / retomar · solte e centralize para retomar" => Some(Text::PauseResume),
             "Select · dois toques rápidos" => Some(Text::DoubleTapSelect),
@@ -209,7 +211,11 @@ catalog! {
     TourGame => ("Ready to play? Switch modes", "¿Listo para jugar? Cambia de modo", "Vai jogar? Troque de modo");
     TourGameCopy => ("Press Select twice quickly to enter Game mode. Mouse and keyboard commands stop. Your game uses its own controls; Windows apps with native controller support use their own focus navigation.", "Pulsa Select dos veces rápidamente para entrar en Juego. Se detienen el ratón y el teclado. El juego usa sus propios controles; las apps de Windows compatibles usan su navegación de foco nativa.", "Dê dois toques rápidos em Select para entrar em Jogo. Os comandos de mouse e teclado param. O game usa seus próprios controles; apps do Windows compatíveis usam a navegação de foco nativa.");
     TourDesktop => ("Return to Desktop", "Vuelve a Escritorio", "Retorne ao Desktop");
-    TourDesktopCopy => ("Press Select twice again to return. Release the buttons and center the sticks before using the mouse.", "Pulsa Select dos veces otra vez para volver. Suelta los botones y centra los sticks antes de usar el ratón.", "Dê dois toques em Select novamente para voltar. Solte os botões e centralize os analógicos antes de usar o mouse.");
+    TourDesktopCopy => ("Double tap Select to return to Desktop and use the mouse.", "Pulsa Select dos veces para volver al Escritorio y usar el ratón.", "Dê dois toques em Select para voltar ao Desktop e usar o mouse.");
+    TourWindowSwitcher => ("Alt+Tab window selector", "Selector de ventanas Alt+Tab", "Seletor de janelas Alt+Tab");
+    TourWindowSwitcherCopy => ("R1 opens the Alt+Tab selector. Press R1 again to move through windows, X/□ to select, or Y/△ to cancel. Here, A/✕ continues this guide.", "R1 abre el selector Alt+Tab. Pulsa R1 otra vez para recorrer las ventanas, X/□ para elegir o Y/△ para cancelar. Aquí, A/✕ continúa la guía.", "R1 abre o seletor Alt+Tab. Pressione R1 novamente para percorrer as janelas, X/□ para selecionar ou Y/△ para cancelar. Aqui, A/✕ continua o guia.");
+    TourDesktopShortcutsCopy => ("Hold Start/Menu and tap LB/L1 for the system's Print Screen capture. Hold Start/Menu and tap RB/R1 to toggle F11 fullscreen. Try both safely here.", "Mantén Start/Menu y pulsa LB/L1 para iniciar la captura del sistema con Impr Pant. Mantén Start/Menu y pulsa RB/R1 para alternar la pantalla completa con F11. Pruébalos aquí sin afectar al sistema.", "Segure Start/Menu e toque LB/L1 para iniciar a captura do sistema com Print Screen. Segure Start/Menu e toque RB/R1 para alternar a tela cheia com F11. Experimente os dois aqui sem afetar o sistema.");
+    TourShortcutPreview => ("Try these desktop shortcuts", "Prueba estos atajos de escritorio", "Experimente estes atalhos do Desktop");
     TourPause => ("Pause whenever you need", "Pausa cuando lo necesites", "Pause quando precisar");
     TourPauseCopy => ("Press Start + Select together to pause Desktop controls. Release them and repeat to resume. This keeps you in the same mode.", "Pulsa Start + Select juntos para pausar el control del escritorio. Suéltalos y repite para reanudar. Permaneces en el mismo modo.", "Pressione Start + Select juntos para pausar o controle do desktop. Solte e repita para retomar. Você continua no mesmo modo.");
     TourReady => ("Your desktop is in your hands", "Tu escritorio está en tus manos", "Seu desktop está nas suas mãos");
@@ -231,6 +237,8 @@ catalog! {
     TourPracticeDesktop => ("Practice desktop", "Escritorio de práctica", "Desktop de prática");
     TourTypingField => ("Your letters appear here…", "Tus letras aparecen aquí…", "Suas letras aparecem aqui…");
     TourNavigation => ("LB / L1: back · RB / R1: continue · Tab / Enter also work", "LB / L1: atrás · RB / R1: continuar · También puedes usar Tab / Enter", "LB / L1: voltar · RB / R1: continuar · Tab / Enter também funcionam");
+    TourNavigationWindowSwitcher => ("LB/L1: back · R1: cycle windows · A/✕: continue", "LB/L1: atrás · R1: cambiar ventana · A/✕: continuar", "LB/L1: voltar · R1: trocar janela · A/✕: continuar");
+    TourNavigationDesktopShortcuts => ("LB/L1: back · RB/R1: continue · hold Start/Menu to try a shortcut", "LB/L1: atrás · RB/R1: continuar · mantén Start/Menu para probar un atajo", "LB/L1: voltar · RB/R1: continuar · segure Start/Menu para testar um atalho");
     TourStartDesktop => ("Start in Desktop", "Empezar en Escritorio", "Começar no Desktop");
     TourStartGame => ("Start in Game", "Empezar en Juego", "Começar no modo Jogo");
     TourReplay => ("Review welcome tour", "Repetir bienvenida", "Rever boas-vindas");
@@ -275,6 +283,9 @@ catalog! {
     CommandGuide => ("Controller guide", "Guía del mando", "Guia de comandos");
     PointerCommands => ("Mouse and scrolling", "Ratón y desplazamiento", "Mouse e rolagem");
     NavigationCommands => ("Selection and windows", "Selección y ventanas", "Seleção e janelas");
+    ScreenshotAndFullscreen => ("Screenshot and fullscreen", "Capturas y pantalla completa", "Captura e tela cheia");
+    PrintScreenShortcut => ("Print Screen · system screenshot", "Impr Pant · captura del sistema", "Print Screen · captura do sistema");
+    FullscreenShortcut => ("F11 · toggle fullscreen", "F11 · activar pantalla completa", "F11 · alternar tela cheia");
     DesktopCommandsHelp => ("These controls apply in Desktop mode while the on-screen keyboard is closed.", "Estos controles se aplican en modo escritorio con el teclado en pantalla cerrado.", "Estes comandos funcionam no modo Desktop, com o teclado visual fechado.");
     KeyboardCommandsHelp => ("R3 opens the keyboard in Desktop mode; Select/Back + R3 opens or closes it in Game mode. While open, the buttons below control typing, including F1–F12.", "R3 abre el teclado en modo Escritorio; Select/Back + R3 lo abre o cierra en modo Juego. Mientras esté abierto, estos botones controlan la escritura, incluyendo F1–F12.", "R3 abre o teclado no modo Desktop; Select/Back + R3 abre ou fecha no modo Jogo. Enquanto estiver aberto, os botões abaixo controlam a digitação, incluindo F1–F12.");
     GameCommandsHelp => ("Game mode is active: your game defines the controls. Hold Select/Back and press R3 to open or close the keyboard; with the keyboard closed, R3 alone goes to the game. Double tap Select to return to Desktop and use the mouse.", "Modo Juego activo: el juego define los controles. Mantén Select/Back y pulsa R3 para abrir o cerrar el teclado; con el teclado cerrado, R3 solo se envía al juego. Pulsa Select dos veces para volver al modo Escritorio y usar el ratón.", "Modo Jogo ativo: os comandos são definidos pelo próprio jogo. Segure Select/Back e pressione R3 para abrir ou fechar o teclado; com o teclado fechado, R3 sozinho é enviado ao jogo. Dê dois toques em Select para voltar ao Desktop e usar o mouse.");
@@ -392,7 +403,11 @@ catalog! {
     EscapeCancel => ("Escape · close menu / cancel", "Escape · cerrar menú / cancelar", "Escape · fechar menu / cancelar");
     ArrowRepeat => ("Arrow keys · hold to repeat", "Flechas · mantener para repetir", "Setas · segurar para repetir");
     NextField => ("Tab · next field", "Tab · campo siguiente", "Tab · próximo campo");
-    SwitchWindow => ("Alt+Tab · switch window", "Alt+Tab · cambiar ventana", "Alt+Tab · alternar janela");
+    SwitchWindow => (
+        "Alt+Tab selector · R1 next · X/□ select · Y/△ cancel",
+        "Selector Alt+Tab · R1 siguiente · X/□ selecciona · Y/△ cancela",
+        "Seletor Alt+Tab · R1 avança · X/□ confirma · Y/△ cancela"
+    );
     PauseResume => ("Pause / resume · release and center to resume", "Pausar / reanudar · suelta y centra para reanudar", "Pausar / retomar · solte e centralize para retomar");
     MoveKeyboardSelection => ("Move selection across the keyboard", "Mover la selección por el teclado", "Mover a seleção pelo teclado");
     TypeSelectedKey => ("Activate the selected key", "Activar la tecla seleccionada", "Ativar a tecla selecionada");

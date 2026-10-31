@@ -4,6 +4,7 @@ use enigo::{Axis as ScrollAxis, Coordinate, Direction, Enigo, Key, Keyboard, Mou
 
 use crate::control::{Action, DpadDirection, KeyboardInput, MouseButton, SystemKey};
 use crate::keyboard::{KeyboardModifiers, KeyboardPresentation, KeyboardSession};
+use crate::window_switcher::{WindowSwitcherState, WindowSwitcherStep};
 use crate::windows_gamepad_hook::GamepadNavigationHook;
 use crate::windows_navigation::{
     NativeDpadRouting, NativeDpadTargetCache, PausedCursor, filter_desktop_action,
@@ -47,6 +48,7 @@ pub struct Platform {
     paused_cursor: PausedCursor,
     cursor_scale: WindowsCursorScale,
     last_target_check: Option<Instant>,
+    window_switcher: WindowSwitcherState,
 }
 
 impl Platform {
@@ -65,6 +67,7 @@ impl Platform {
             paused_cursor: PausedCursor::default(),
             cursor_scale: WindowsCursorScale::new(),
             last_target_check: None,
+            window_switcher: WindowSwitcherState::default(),
         })
     }
 
@@ -95,6 +98,9 @@ impl Platform {
         enabled: bool,
         connected: bool,
     ) -> Result<(), String> {
+        if !enabled || !connected {
+            self.finish_window_switcher(true)?;
+        }
         self.desktop_controls_active = enabled && connected;
         self.controller_connected = connected;
         self.navigation_hook.set_active(
@@ -175,6 +181,19 @@ impl Platform {
     }
 
     pub fn apply(&mut self, action: Action) -> Result<(), String> {
+        if self.window_switcher.is_open() {
+            match action {
+                Action::Key(SystemKey::Enter) => {
+                    self.finish_window_switcher(false)?;
+                    return Ok(());
+                }
+                Action::Key(SystemKey::Escape) => {
+                    self.finish_window_switcher(true)?;
+                    return Ok(());
+                }
+                _ => {}
+            }
+        }
         if self.touch_keyboard.active()
             && self.touch_keyboard.gamepad_session_active()
             && !self.touch_keyboard.uses_native_gamepad()
@@ -264,17 +283,45 @@ impl Platform {
             }
             Action::KeyboardChord(input, modifiers) => self.emit_keyboard_input(input, modifiers),
             Action::NextWindow => {
-                let pressed = self.input.key(Key::Alt, Direction::Press);
-                let tab = if pressed.is_ok() {
+                let step = self.window_switcher.next();
+                let pressed = if step == WindowSwitcherStep::Open {
+                    let result = self.input.key(Key::Alt, Direction::Press);
+                    if result.is_err() {
+                        self.window_switcher.finish();
+                    }
+                    result
+                } else {
+                    Ok(())
+                };
+                if pressed.is_ok() {
                     self.input.key(Key::Tab, Direction::Click)
                 } else {
                     pressed
-                };
-                let released = self.input.key(Key::Alt, Direction::Release);
-                tab.and(released)
+                }
             }
         };
         result.map_err(|error| format!("Falha enviando entrada ao Windows: {error}"))
+    }
+
+    fn finish_window_switcher(&mut self, cancel: bool) -> Result<(), String> {
+        if !self.window_switcher.is_open() {
+            return Ok(());
+        }
+        let cancel_result = if cancel {
+            self.input
+                .key(Key::Escape, Direction::Click)
+                .map_err(|error| error.to_string())
+        } else {
+            Ok(())
+        };
+        let release = self
+            .input
+            .key(Key::Alt, Direction::Release)
+            .map_err(|error| error.to_string());
+        if release.is_ok() {
+            self.window_switcher.finish();
+        }
+        cancel_result.and(release)
     }
 
     fn keyboard_click_target(&self) -> bool {
@@ -337,6 +384,7 @@ impl Platform {
                 12 => Key::F12,
                 _ => return Ok(()),
             },
+            KeyboardInput::PrintScreen => Key::PrintScr,
             KeyboardInput::Backspace => Key::Backspace,
             KeyboardInput::Enter => Key::Return,
             KeyboardInput::Escape => Key::Escape,

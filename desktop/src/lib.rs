@@ -12,6 +12,7 @@ pub mod runtime;
 pub(crate) mod startup;
 pub mod tray;
 pub mod updater;
+mod window_switcher;
 
 #[cfg(any(target_os = "windows", test))]
 mod windows_navigation;

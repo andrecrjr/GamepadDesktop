@@ -45,7 +45,7 @@ No código, esses fluxos se concentram em `src/gamepads.rs`, `src/control.rs`, `
 
 ### Mouse
 
-O analógico esquerdo move o ponteiro e o direito rola a página. A oferece clique e arrasto; B oferece clique direito. O direcional envia setas, X envia Enter e Y envia Escape. L3 envia Super/Windows, L1 envia Tab e R1 alterna janelas.
+O analógico esquerdo move o ponteiro e o direito rola a página. A oferece clique e arrasto; B oferece clique direito. O direcional envia setas, X envia Enter e Y envia Escape. L3 envia Super/Windows, L1 envia Tab e R1 abre o seletor de janelas; repita R1 para avançar, X confirma e Y cancela.
 
 A velocidade do ponteiro e a zona morta podem ser ajustadas no painel. Esses ajustes valem para a sessão.
 
@@ -75,7 +75,9 @@ Os rótulos abaixo descrevem também as posições físicas dos quatro botões f
 | R3                             | Abrir ou fechar teclado                |
 | L3                             | Super / tecla Windows                  |
 | LB / L1                        | Tab                                    |
-| RB / R1                        | Alt+Tab                                |
+| RB / R1                        | Abre o seletor Alt+Tab; R1 avança; X confirma; Y cancela |
+| Segure Start/Menu + LB / L1    | Print Screen · inicia a captura do sistema |
+| Segure Start/Menu + RB / R1    | F11 · alternar tela cheia              |
 | Start + Select / Menu + View   | Pausar ou retomar; solte e centralize para retomar |
 
 No teclado visual, o botão inferior digita a tecla selecionada; o direito apaga; o esquerdo envia Enter; o superior envia Escape; L3 envia espaço; L1 envia Tab; R1 alterna Shift.

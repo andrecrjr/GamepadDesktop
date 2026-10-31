@@ -4,7 +4,7 @@ use std::time::Duration;
 use crate::{
     control::{
         Action, Button, ControlMode, ControlSettings, GamepadFrame, KeyboardInput, MouseButton,
-        MouseController,
+        MouseController, SystemKey,
     },
     keyboard::KeyboardSession,
 };
@@ -24,12 +24,14 @@ pub enum Step {
     CloseKeyboard,
     Game,
     Desktop,
+    WindowSwitcher,
+    DesktopShortcuts,
     Pause,
     Ready,
 }
 
 impl Step {
-    pub const ALL: [Self; 14] = [
+    pub const ALL: [Self; 16] = [
         Self::Welcome,
         Self::Modes,
         Self::Pointer,
@@ -42,6 +44,8 @@ impl Step {
         Self::CloseKeyboard,
         Self::Game,
         Self::Desktop,
+        Self::WindowSwitcher,
+        Self::DesktopShortcuts,
         Self::Pause,
         Self::Ready,
     ];
@@ -58,9 +62,11 @@ impl Step {
             Self::OpenKeyboard => (3, 1, 3),
             Self::Type => (3, 2, 3),
             Self::CloseKeyboard => (3, 3, 3),
-            Self::Game => (4, 1, 3),
-            Self::Desktop => (4, 2, 3),
-            Self::Pause => (4, 3, 3),
+            Self::Game => (4, 1, 5),
+            Self::Desktop => (4, 2, 5),
+            Self::WindowSwitcher => (4, 3, 5),
+            Self::DesktopShortcuts => (4, 4, 5),
+            Self::Pause => (4, 5, 5),
             Self::Ready => (5, 1, 1),
         }
     }
@@ -98,6 +104,11 @@ pub struct Onboarding {
     moved_selection: bool,
     paused_once: bool,
     demo_time: f64,
+    pub(crate) window_switcher_open: bool,
+    pub(crate) selected_window: usize,
+    pub(crate) preview_shortcut: Option<KeyboardInput>,
+    print_screen_practiced: bool,
+    fullscreen_practiced: bool,
 }
 
 impl Default for Onboarding {
@@ -118,6 +129,11 @@ impl Default for Onboarding {
             moved_selection: false,
             paused_once: false,
             demo_time: 0.0,
+            window_switcher_open: false,
+            selected_window: 0,
+            preview_shortcut: None,
+            print_screen_practiced: false,
+            fullscreen_practiced: false,
         };
         tour.reset_lesson();
         tour
@@ -146,6 +162,14 @@ impl Onboarding {
     }
     pub fn practice_settings(&self) -> ControlSettings {
         self.settings
+    }
+
+    pub fn window_switcher_preview(&self) -> Option<usize> {
+        self.window_switcher_open.then_some(self.selected_window)
+    }
+
+    pub fn shortcut_preview(&self) -> Option<KeyboardInput> {
+        self.preview_shortcut
     }
 
     fn reset_lesson(&mut self) {
@@ -179,6 +203,11 @@ impl Onboarding {
         self.moved_selection = false;
         self.paused_once = false;
         self.demo_time = 0.0;
+        self.window_switcher_open = false;
+        self.selected_window = 0;
+        self.preview_shortcut = None;
+        self.print_screen_practiced = false;
+        self.fullscreen_practiced = false;
     }
 
     pub fn update(
@@ -200,8 +229,12 @@ impl Onboarding {
             self.previous
                 .is_some_and(|previous| frame.pressed(button) && !previous.pressed(button))
         };
-        let back = edge(Button::LeftShoulder);
-        let next = edge(Button::RightShoulder);
+        let trying_desktop_shortcut =
+            self.step == Step::DesktopShortcuts && frame.pressed(Button::Start);
+        let back = edge(Button::LeftShoulder) && !trying_desktop_shortcut;
+        let next = edge(Button::RightShoulder)
+            && self.step != Step::WindowSwitcher
+            && !trying_desktop_shortcut;
         let confirm = edge(Button::South);
         if self.step == Step::Ready {
             if edge(Button::Left) {
@@ -219,7 +252,13 @@ impl Onboarding {
         if self.step == Step::Ready {
             return confirm.then_some(self.start_mode);
         }
-        if next || confirm && matches!(self.step, Step::Welcome | Step::Modes) {
+        if next
+            || confirm
+                && matches!(
+                    self.step,
+                    Step::Welcome | Step::Modes | Step::WindowSwitcher
+                )
+        {
             self.next();
         } else if !self.demonstrating && self.step.is_practice() {
             self.practice(frame, elapsed);
@@ -264,6 +303,16 @@ impl Onboarding {
                 Step::Game | Step::Desktop => {
                     frame.buttons[Button::Select as usize] =
                         (0.4..0.48).contains(&time) || (0.65..0.73).contains(&time)
+                }
+                Step::WindowSwitcher => {
+                    frame.buttons[Button::RightShoulder as usize] =
+                        (0.4..0.55).contains(&time) || (0.85..1.0).contains(&time);
+                    frame.buttons[Button::West as usize] = (1.35..1.5).contains(&time);
+                }
+                Step::DesktopShortcuts => {
+                    frame.buttons[Button::Start as usize] = true;
+                    frame.buttons[Button::LeftShoulder as usize] = (0.4..0.55).contains(&time);
+                    frame.buttons[Button::RightShoulder as usize] = (1.1..1.25).contains(&time);
                 }
                 Step::Pause => {
                     let pressed = (0.4..0.6).contains(&time) || (1.0..1.2).contains(&time);
@@ -335,6 +384,27 @@ impl Onboarding {
                         (self.step, open),
                         (Step::OpenKeyboard, true) | (Step::CloseKeyboard, false)
                     );
+                }
+                Action::NextWindow if self.step == Step::WindowSwitcher => {
+                    self.window_switcher_open = true;
+                    self.selected_window = (self.selected_window + 1) % 3;
+                }
+                Action::Key(SystemKey::Enter | SystemKey::Escape)
+                    if self.step == Step::WindowSwitcher && self.window_switcher_open =>
+                {
+                    self.window_switcher_open = false;
+                    self.complete = true;
+                }
+                Action::Keyboard(
+                    input @ (KeyboardInput::PrintScreen | KeyboardInput::Function(11)),
+                ) if self.step == Step::DesktopShortcuts => {
+                    self.preview_shortcut = Some(input);
+                    match input {
+                        KeyboardInput::PrintScreen => self.print_screen_practiced = true,
+                        KeyboardInput::Function(11) => self.fullscreen_practiced = true,
+                        _ => {}
+                    }
+                    self.complete = self.print_screen_practiced && self.fullscreen_practiced;
                 }
                 Action::Keyboard(KeyboardInput::Character(character))
                     if self.step == Step::Type =>

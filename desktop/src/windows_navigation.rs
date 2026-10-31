@@ -68,6 +68,10 @@ pub(crate) struct TouchKeyboardState {
     pending: Option<bool>,
 }
 
+pub(crate) fn should_toggle_system_keyboard(visible: bool, gamepad_view_active: bool) -> bool {
+    !visible || !gamepad_view_active
+}
+
 impl TouchKeyboardState {
     pub(crate) fn observe(&mut self, requested: bool, visible: bool) -> Option<bool> {
         let changed = requested != self.requested;
@@ -379,6 +383,14 @@ mod tests {
 
         assert_eq!(keyboard.close_after_visibility_error(false), Some(false));
         assert!(!keyboard.requested);
+    }
+
+    #[test]
+    fn closing_a_gamepad_keyboard_uses_the_system_visibility_toggle() {
+        assert!(should_toggle_system_keyboard(false, true));
+        assert!(should_toggle_system_keyboard(false, false));
+        assert!(!should_toggle_system_keyboard(true, true));
+        assert!(should_toggle_system_keyboard(true, false));
     }
 
     #[test]
