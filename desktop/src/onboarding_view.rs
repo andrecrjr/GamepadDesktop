@@ -5,18 +5,16 @@ use egui::{Align2, Color32, FontId, Pos2, Rect, RichText, Sense, Stroke, StrokeK
 use gamepad_desktop::{
     control::{ControlMode, MOUSE_SHORTCUTS},
     i18n::{Locale, Text},
-    keyboard::{KEY_ROWS, key_width_quarters},
     onboarding::{Command, Onboarding, Step},
     runtime::RuntimeState,
 };
 use sdl3::gamepad::GamepadType;
 
-const CHAPTERS: [Text; 6] = [
-    Text::TourShortWelcome,
-    Text::TourShortModes,
+const CHAPTERS: [Text; 5] = [
     Text::MouseLabel,
+    Text::TourScroll,
     Text::TourShortKeyboard,
-    Text::TourShortSwitch,
+    Text::TourShortModes,
     Text::TourShortReady,
 ];
 
@@ -26,13 +24,15 @@ pub fn show(ui: &mut egui::Ui, state: &RuntimeState) -> Option<Command> {
     auto_family(ui.ctx(), state.controller_type);
     let mut command = None;
     egui::Panel::bottom("welcome-navigation")
-        .frame(egui::Frame::new().fill(PAGE_BACKGROUND).inner_margin(18))
+        .frame(egui::Frame::new().fill(PAGE_BACKGROUND).inner_margin(10))
         .show(ui, |ui| {
             ui.horizontal_wrapped(|ui| {
                 if ui
                     .add_enabled(
-                        tour.step != Step::Welcome,
-                        egui::Button::new(locale.text(Text::TourBack)),
+                        tour.step != Step::Welcome
+                            && !(tour.extra_lessons && tour.step == Step::RightClick),
+                        egui::Button::new(locale.text(Text::TourBack))
+                            .min_size(Vec2::new(90.0, 48.0)),
                     )
                     .clicked()
                 {
@@ -64,8 +64,18 @@ pub fn show(ui: &mut egui::Ui, state: &RuntimeState) -> Option<Command> {
                     };
                     if ui
                         .add(
-                            egui::Button::new(RichText::new(locale.text(text)).strong())
-                                .fill(Color32::from_rgb(28, 83, 77)),
+                            egui::Button::new(
+                                RichText::new(locale.text(text))
+                                    .strong()
+                                    .size(19.0)
+                                    .color(if tour.complete { PAGE_BACKGROUND } else { TEXT }),
+                            )
+                            .min_size(Vec2::new(180.0, 48.0))
+                            .fill(if tour.complete {
+                                ACCENT
+                            } else {
+                                Color32::from_rgb(28, 83, 77)
+                            }),
                         )
                         .clicked()
                     {
@@ -89,75 +99,63 @@ pub fn show(ui: &mut egui::Ui, state: &RuntimeState) -> Option<Command> {
             });
         });
     egui::CentralPanel::default().show(ui, |ui| {
-        egui::ScrollArea::vertical().show(ui, |ui| {
-            ui.add_space(10.0);
-            ui.horizontal_wrapped(|ui| {
-                ui.add(
-                    egui::Image::new(egui::include_image!("../assets/gamepad-desktop.svg"))
-                        .fit_to_exact_size(Vec2::splat(54.0)),
-                );
-                ui.vertical(|ui| {
-                    ui.label(RichText::new("Gamepad Desktop").strong().size(22.0));
-                    ui.label(RichText::new(locale.text(Text::TourShortWelcome)).color(ACCENT));
+        egui::ScrollArea::vertical()
+            .id_salt(("onboarding-content", tour.step as usize, tour.extra_lessons))
+            .show(ui, |ui| {
+                ui.add_space(2.0);
+                ui.horizontal_wrapped(|ui| {
+                    ui.add(
+                        egui::Image::new(egui::include_image!("../assets/gamepad-desktop.svg"))
+                            .fit_to_exact_size(Vec2::splat(32.0)),
+                    );
+                    ui.label(RichText::new("Gamepad Desktop").strong().size(20.0));
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        let mut language = locale;
+                        egui::ComboBox::from_id_salt("welcome-language")
+                            .selected_text(locale.name())
+                            .show_ui(ui, |ui| {
+                                for choice in Locale::ALL {
+                                    ui.selectable_value(&mut language, choice, choice.name());
+                                }
+                            });
+                        if language != locale {
+                            command = Some(Command::Language(language));
+                        }
+                    });
                 });
-                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    let mut language = locale;
-                    egui::ComboBox::from_id_salt("welcome-language")
-                        .selected_text(locale.name())
-                        .show_ui(ui, |ui| {
-                            for choice in Locale::ALL {
-                                ui.selectable_value(&mut language, choice, choice.name());
-                            }
-                        });
-                    if language != locale {
-                        command = Some(Command::Language(language));
+                ui.collapsing(locale.text(Text::InterfaceSize), |ui| {
+                    if let Some(scale) = super::interface_scale(ui, locale, state.ui_scale) {
+                        command = Some(Command::Scale(scale));
                     }
                 });
-            });
-            ui.add_space(10.0);
-            if let Some(scale) = super::interface_scale(ui, locale, state.ui_scale) {
-                command = Some(Command::Scale(scale));
-            }
-            ui.add_space(16.0);
-            progress(ui, tour, locale);
-            ui.add_space(14.0);
-            egui::Frame::new()
-                .fill(CARD_BACKGROUND)
-                .stroke(Stroke::new(1.0, BORDER))
-                .corner_radius(16)
-                .inner_margin(20)
-                .show(ui, |ui| {
-                    let (title, copy) = lesson_copy(tour.step);
-                    ui.label(RichText::new(locale.text(title)).strong().size(26.0));
-                    ui.add_space(6.0);
-                    ui.label(
-                        RichText::new(locale.text(copy))
-                            .size(15.0)
-                            .color(MUTED_TEXT),
-                    );
-                    ui.add_space(16.0);
-                    if matches!(tour.step, Step::Welcome | Step::Modes | Step::Ready) {
-                        modes(ui, locale);
-                    } else {
-                        let width = ui.available_width();
-                        if width >= 600.0 {
-                            ui.horizontal_top(|ui| {
-                                ui.allocate_ui(Vec2::new(190.0, 210.0), |ui| {
-                                    controller_diagram(ui, tour.step)
-                                });
-                                ui.allocate_ui(Vec2::new(width - 210.0, 210.0), |ui| {
-                                    scene(ui, tour, locale)
-                                });
-                            });
-                        } else {
-                            scene(ui, tour, locale);
-                            controller_diagram(ui, tour.step);
-                        }
-                        ui.add_space(10.0);
-                        shortcut(ui, tour.step, locale);
-                        ui.add_space(10.0);
+                ui.add_space(6.0);
+                progress(ui, tour, locale);
+                ui.add_space(8.0);
+                egui::Frame::new()
+                    .fill(CARD_BACKGROUND)
+                    .stroke(Stroke::new(1.0, BORDER))
+                    .corner_radius(16)
+                    .inner_margin(14)
+                    .show(ui, |ui| {
+                        let (title, copy) = lesson_copy(tour.step);
+                        ui.label(RichText::new(locale.text(title)).strong().size(32.0));
+                        ui.add_space(6.0);
                         ui.label(
-                            RichText::new(locale.text(if tour.complete {
+                            RichText::new(locale.text(copy))
+                                .size(18.0)
+                                .color(MUTED_TEXT),
+                        );
+                        ui.add_space(10.0);
+                        if matches!(tour.step, Step::Welcome | Step::Modes | Step::Ready) {
+                            modes(ui, locale);
+                            if tour.step == Step::Ready && !tour.extra_lessons {
+                                ui.add_space(8.0);
+                                if ui.button(locale.text(Text::TourLearnMore)).clicked() {
+                                    command = Some(Command::LearnMore);
+                                }
+                            }
+                        } else {
+                            let feedback = locale.text(if tour.complete {
                                 if tour.demonstrating {
                                     Text::TourDemoSuccess
                                 } else {
@@ -165,101 +163,142 @@ pub fn show(ui: &mut egui::Ui, state: &RuntimeState) -> Option<Command> {
                                 }
                             } else {
                                 Text::TourOptional
-                            }))
-                            .color(if tour.complete {
-                                ACCENT
+                            });
+                            if tour.complete {
+                                egui::Frame::new()
+                                    .fill(Color32::from_rgb(24, 65, 48))
+                                    .stroke(Stroke::new(1.0, Color32::from_rgb(134, 239, 172)))
+                                    .corner_radius(8)
+                                    .inner_margin(12)
+                                    .show(ui, |ui| {
+                                        ui.set_min_width(ui.available_width());
+                                        ui.label(
+                                            RichText::new(feedback)
+                                                .strong()
+                                                .size(18.0)
+                                                .color(Color32::from_rgb(187, 247, 208)),
+                                        );
+                                    });
                             } else {
-                                MUTED_TEXT
-                            }),
-                        );
-                        ui.add_space(8.0);
-                        if ui
-                            .button(locale.text(if tour.demonstrating {
-                                Text::TourPractice
+                                ui.label(RichText::new(feedback).color(MUTED_TEXT));
+                            }
+                            ui.add_space(12.0);
+                            ui.horizontal_wrapped(|ui| {
+                                if ui
+                                    .button(locale.text(if tour.demonstrating {
+                                        Text::TourPractice
+                                    } else {
+                                        Text::TourDemo
+                                    }))
+                                    .clicked()
+                                {
+                                    command = Some(Command::ToggleDemo);
+                                }
+                                if tour.demonstrating {
+                                    ui.label(
+                                        RichText::new(locale.text(Text::TourDemoBadge))
+                                            .small()
+                                            .color(ACCENT),
+                                    );
+                                }
+                            });
+                            ui.add_space(8.0);
+                            let width = ui.available_width();
+                            if width >= 600.0 {
+                                ui.horizontal_top(|ui| {
+                                    ui.allocate_ui(Vec2::new(190.0, 210.0), |ui| {
+                                        controller_diagram(ui, tour.step)
+                                    });
+                                    ui.allocate_ui(Vec2::new(width - 210.0, 210.0), |ui| {
+                                        scene(ui, tour, locale)
+                                    });
+                                });
                             } else {
-                                Text::TourDemo
-                            }))
-                            .clicked()
-                        {
-                            command = Some(Command::ToggleDemo);
-                        }
-                        if tour.demonstrating {
+                                scene(ui, tour, locale);
+                            }
+                            ui.add_space(10.0);
+                            shortcut(ui, tour.step, locale);
+                            ui.add_space(8.0);
                             ui.label(
-                                RichText::new(locale.text(Text::TourDemoBadge))
-                                    .small()
-                                    .color(ACCENT),
+                                RichText::new(locale.text(Text::TourSandbox)).color(MUTED_TEXT),
                             );
+                            if state.ready
+                                && state.keyboard.presentation
+                                    == gamepad_desktop::keyboard::KeyboardPresentation::Unavailable
+                                && matches!(
+                                    tour.step,
+                                    Step::OpenKeyboard | Step::Type | Step::CloseKeyboard
+                                )
+                            {
+                                ui.small(locale.text(Text::TourKeyboardUnavailable));
+                            }
                         }
-                        ui.add_space(8.0);
-                        ui.small(locale.text(Text::TourSandbox));
-                        if state.ready
-                            && state.keyboard.presentation
-                                == gamepad_desktop::keyboard::KeyboardPresentation::Unavailable
-                            && matches!(
-                                tour.step,
-                                Step::OpenKeyboard | Step::Type | Step::CloseKeyboard
-                            )
-                        {
-                            ui.small(locale.text(Text::TourKeyboardUnavailable));
-                        }
-                    }
-                });
-            ui.add_space(12.0);
-            if let Some(controller) = &state.controller {
-                ui.label(
-                    RichText::new(format!(
-                        "{}{controller}",
-                        locale.text(Text::ControllerPrefix)
-                    ))
-                    .color(ACCENT),
-                );
-            } else {
-                let needs_profile =
-                    !state.devices.is_empty() && state.devices.iter().all(|device| !device.mapped);
-                ui.label(
-                    RichText::new(locale.text(if needs_profile {
-                        Text::TourProfile
-                    } else {
-                        Text::TourConnect
-                    }))
-                    .color(MUTED_TEXT),
-                );
-            }
-            if tour.step == Step::Welcome {
-                ui.add_space(8.0);
-                let before = gamepad_icons::family(ui.ctx());
-                gamepad_icons::show_family_selector(
-                    ui,
-                    locale.text(Text::ControllerSymbols),
-                    locale.text(Text::ControllerSymbolsHelp),
-                );
-                if before != gamepad_icons::family(ui.ctx()) {
-                    ui.ctx().data_mut(|data| {
-                        data.insert_temp(egui::Id::unique("welcome-manual-family"), true)
                     });
+                ui.add_space(12.0);
+                if let Some(controller) = &state.controller {
+                    ui.label(
+                        RichText::new(format!(
+                            "{}{controller}",
+                            locale.text(Text::ControllerPrefix)
+                        ))
+                        .color(ACCENT),
+                    );
+                } else {
+                    let needs_profile = !state.devices.is_empty()
+                        && state.devices.iter().all(|device| !device.mapped);
+                    ui.label(
+                        RichText::new(locale.text(if needs_profile {
+                            Text::TourProfile
+                        } else {
+                            Text::TourConnect
+                        }))
+                        .color(MUTED_TEXT),
+                    );
                 }
-            }
-        });
+                if tour.step == Step::Welcome {
+                    ui.add_space(8.0);
+                    let before = gamepad_icons::family(ui.ctx());
+                    gamepad_icons::show_family_selector(
+                        ui,
+                        locale.text(Text::ControllerSymbols),
+                        locale.text(Text::ControllerSymbolsHelp),
+                    );
+                    if before != gamepad_icons::family(ui.ctx()) {
+                        ui.ctx().data_mut(|data| {
+                            data.insert_temp(egui::Id::unique("welcome-manual-family"), true)
+                        });
+                    }
+                }
+            });
     });
     command
 }
 
 fn progress(ui: &mut egui::Ui, tour: &Onboarding, locale: Locale) {
-    let (chapter, part, count) = tour.step.chapter();
-    ui.horizontal(|ui| {
+    let (chapter, total) = tour.progress();
+    let (_, part, count) = tour.step.chapter();
+    ui.horizontal_wrapped(|ui| {
         ui.label(
-            RichText::new(format!("{:02} / 06", chapter + 1))
-                .strong()
-                .color(ACCENT),
+            RichText::new(format!(
+                "{} {} / {total}",
+                locale.text(Text::TourStage),
+                chapter + 1
+            ))
+            .strong()
+            .color(ACCENT),
         );
-        ui.label(locale.text(CHAPTERS[chapter]));
-        if count > 1 {
+        ui.label(locale.text(if tour.extra_lessons {
+            Text::TourLearnMore
+        } else {
+            CHAPTERS[chapter]
+        }));
+        if !tour.extra_lessons && part > 0 && count > 1 {
             ui.label(RichText::new(format!("· {part}/{count}")).color(MUTED_TEXT));
         }
     });
     let (rect, _) = ui.allocate_exact_size(Vec2::new(ui.available_width(), 4.0), Sense::hover());
-    for index in 0..6 {
-        let width = (rect.width() - 5.0 * 6.0) / 6.0;
+    for index in 0..total {
+        let width = (rect.width() - (total - 1) as f32 * 6.0) / total as f32;
         let bar = Rect::from_min_size(
             rect.min + Vec2::new(index as f32 * (width + 6.0), 0.0),
             Vec2::new(width, 4.0),
@@ -652,33 +691,11 @@ fn scene(ui: &mut egui::Ui, tour: &Onboarding, locale: Locale) {
                 TEXT,
             );
             if tour.keyboard().open {
-                let key_height = (content.height() - 40.0) / 6.0;
-                let unit = content.width() / 15.0;
-                for (row, keys) in KEY_ROWS.iter().enumerate() {
-                    let mut x = content.left();
-                    for (column, key) in keys.iter().enumerate() {
-                        let width = f32::from(key_width_quarters(row, column)) / 4.0 * unit;
-                        let cell = Rect::from_min_size(
-                            Pos2::new(x, content.top() + 38.0 + row as f32 * key_height),
-                            Vec2::new(width - 2.0, key_height - 2.0),
-                        );
-                        let selected = tour.keyboard().selected_row == row
-                            && tour.keyboard().selected_column == column;
-                        painter.rect_filled(
-                            cell,
-                            3.0,
-                            if selected { ACCENT } else { CARD_BACKGROUND },
-                        );
-                        painter.text(
-                            cell.center(),
-                            Align2::CENTER_CENTER,
-                            key.label_in(false, locale),
-                            FontId::proportional(9.0),
-                            if selected { PAGE_BACKGROUND } else { TEXT },
-                        );
-                        x += width;
-                    }
-                }
+                let keyboard_rect =
+                    Rect::from_min_max(content.min + Vec2::new(0.0, 38.0), content.max);
+                ui.scope_builder(egui::UiBuilder::new().max_rect(keyboard_rect), |ui| {
+                    super::keyboard_view::show(ui, tour.keyboard());
+                });
             } else {
                 egui::Image::new(gamepad_icons::image_source(
                     gamepad_icons::family(ui.ctx()),
@@ -993,10 +1010,7 @@ mod tests {
                 for step in Step::ALL {
                     let context = egui::Context::default();
                     crate::configure_desktop_style(&context);
-                    let mut tour = Onboarding::default();
-                    while tour.step != step {
-                        tour.next();
-                    }
+                    let tour = Onboarding::lesson(step);
                     let mut state = RuntimeState::default();
                     state.locale = locale;
                     state.ui_scale = scale;

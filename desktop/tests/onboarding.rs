@@ -13,10 +13,7 @@ fn frame(button: Button) -> GamepadFrame {
 }
 
 fn at(step: Step) -> Onboarding {
-    let mut tour = Onboarding::default();
-    while tour.step != step {
-        tour.next();
-    }
+    let mut tour = Onboarding::lesson(step);
     tour.update(Some(&GamepadFrame::default()), TICK);
     tour.update(Some(&GamepadFrame::default()), TICK);
     tour
@@ -47,10 +44,10 @@ fn holding_next_does_not_skip_multiple_lessons() {
     for _ in 0..30 {
         tour.update(Some(&next), TICK);
     }
-    assert_eq!(tour.step, Step::Modes);
+    assert_eq!(tour.step, Step::Pointer);
     tour.update(Some(&GamepadFrame::default()), TICK);
     tap(&mut tour, Button::RightShoulder);
-    assert_eq!(tour.step, Step::Pointer);
+    assert_eq!(tour.step, Step::Click);
 }
 
 #[test]
@@ -275,5 +272,70 @@ fn clicking_outside_the_target_does_not_complete_the_lesson() {
             !tour.complete,
             "a click must start over the target: {step:?}"
         );
+    }
+}
+
+#[test]
+fn quick_start_follows_only_the_core_lessons() {
+    let mut tour = Onboarding::default();
+    for expected in [
+        Step::Welcome,
+        Step::Pointer,
+        Step::Click,
+        Step::Scroll,
+        Step::OpenKeyboard,
+        Step::Type,
+        Step::CloseKeyboard,
+        Step::Game,
+        Step::Desktop,
+        Step::Ready,
+    ] {
+        assert_eq!(tour.step, expected);
+        tour.next();
+    }
+    assert_eq!(tour.step, Step::Ready);
+}
+
+#[test]
+fn optional_lessons_have_their_own_route_and_can_be_revisited() {
+    let mut tour = Onboarding::lesson(Step::RightClick);
+    for expected in [
+        Step::RightClick,
+        Step::Drag,
+        Step::WindowSwitcher,
+        Step::DesktopShortcuts,
+        Step::Pause,
+    ] {
+        assert_eq!(tour.step, expected);
+        assert!(tour.extra_lessons);
+        tour.next();
+    }
+    assert_eq!(tour.step, Step::Ready);
+    tour.back();
+    assert_eq!(tour.step, Step::Pause);
+    for _ in 0..10 {
+        tour.back();
+    }
+    assert_eq!(tour.step, Step::RightClick);
+}
+
+#[test]
+fn quick_start_groups_related_practices_into_five_stages() {
+    let mut tour = Onboarding::default();
+    for (step, stage) in [
+        (Step::Welcome, 0),
+        (Step::Pointer, 0),
+        (Step::Click, 0),
+        (Step::Scroll, 1),
+        (Step::OpenKeyboard, 2),
+        (Step::Type, 2),
+        (Step::CloseKeyboard, 2),
+        (Step::Game, 3),
+        (Step::Desktop, 3),
+        (Step::Ready, 4),
+    ] {
+        assert_eq!(tour.step, step);
+        assert_eq!(tour.progress(), (stage, 5));
+        tour.next();
     }
 }

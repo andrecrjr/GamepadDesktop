@@ -152,6 +152,14 @@ impl DesktopRuntime {
                 state.locale = locale;
                 state.keyboard.locale = locale;
             }
+            TourCommand::LearnMore => {
+                let mut tour = Onboarding::lesson(crate::onboarding::Step::RightClick);
+                tour.start_mode = state
+                    .onboarding
+                    .as_ref()
+                    .map_or(state.settings.mode, |current| current.start_mode);
+                state.onboarding = Some(tour);
+            }
             TourCommand::Skip => state.finish_onboarding(None),
             TourCommand::Finish(mode) => state.finish_onboarding(Some(mode)),
             _ => {

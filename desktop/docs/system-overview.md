@@ -1,186 +1,104 @@
 # Como o Gamepad Desktop funciona
 
-O Gamepad Desktop permite controlar a janela ativa com um gamepad. Ele é um aplicativo independente da extensão de navegador: trabalha no desktop e pode ser usado com navegadores e outros programas, conforme o suporte de cada um.
+O Gamepad Desktop é um aplicativo Rust para Windows e Linux. Ele lê o gamepad em segundo plano e transforma seus comandos em entrada para o aplicativo ativo. O painel serve para aprender os comandos, configurar e acompanhar o estado.
 
-## A experiência em poucas palavras
+Para instalar e usar, consulte o [guia do desktop](../README.md). Para compilar, consulte [desenvolvimento](development.md).
 
-1. Conecte um controle e abra o painel do Gamepad Desktop.
-2. Use o analógico para apontar, o direcional para enviar setas e os botões para clicar ou enviar atalhos.
-3. Abra o teclado visual quando precisar digitar. Ele envia as teclas ao aplicativo que já estava ativo.
-4. Recolha o painel para a bandeja para continuar usando o controle em segundo plano.
-
-O analógico esquerdo move o ponteiro e o direcional envia as setas ao aplicativo ativo. Não há navegação por itens acessíveis.
-
-## Visão do sistema
-
-O controle envia botões e movimentos para o app. O app interpreta cada comando e encaminha a ação ao sistema operacional. O painel apresenta o estado e os ajustes; a bandeja permite ocultá-lo sem parar o controle.
+## Fluxo de entrada
 
 ```mermaid
 flowchart TD
-  A[Gamepad] --> B[Leitura e identificação]
-  B --> C[Interpretação dos comandos]
-  C -->|Analógicos e A/B| E[Mover, clicar e rolar]
-  C -->|Direcional e X/Y| F[Enviar setas, Enter e Escape]
-  C -->|R3| G[Teclado visual sem roubar o foco]
-  E --> H[Janela ativa]
-  F --> H
-  G --> H
-  I[Painel e bandeja] --> C
-  I --> J[Ajustes e perfis]
+  A[Controle conectado] --> B[SDL3: leitura e perfis]
+  B --> C[Runtime: modo e estado]
+  C --> D{Onboarding aberto?}
+  D -->|Sim| E[Prática local e demonstrações]
+  D -->|Não| F{Modo ativo}
+  F -->|Desktop| G[Ponteiro, cliques, rolagem e atalhos]
+  F -->|Jogo| H[Comandos ficam com o jogo]
+  F -->|Atalho de teclado| I[Teclado do sistema ou do app]
+  G --> J[Aplicativo ativo]
+  I --> J
+  K[Painel e bandeja] --> C
 ```
 
-### Partes do sistema
+A navegação comum usa ponteiro e atalhos. O app não enumera elementos acessíveis para escolher o próximo botão de uma janela. A leitura de acessibilidade usada pelo teclado próprio consulta a geometria do campo focado, sem ler seu texto.
 
-| Parte               | O que faz                                                                                              |
-| ------------------- | ------------------------------------------------------------------------------------------------------ |
-| Leitura do controle | Detecta controles conectados, botões e analógicos. Reconecta quando um dispositivo é removido.         |
-| Interpretação       | Converte o estado do controle em movimento, cliques, rolagem, teclas e comandos de pausa.              |
-| Mouse e teclado     | Controla o ponteiro, cliques, arrasto, rolagem, setas e atalhos do sistema.                             |
-| Teclado visual      | Mostra um teclado controlado pelo gamepad e envia cada tecla para o aplicativo ativo.                  |
-| Painel e bandeja    | Mostra o estado, permite ajustar o app e mantém o controle em execução quando o painel é recolhido.    |
+## Modos e recuperação
 
-No código, esses fluxos se concentram em `src/gamepads.rs`, `src/control.rs`, `src/runtime.rs`, `src/keyboard.rs`, `src/linux.rs`, `src/windows.rs`, `src/main.rs` e `src/tray.rs`.
+- **Desktop:** analógicos e botões controlam mouse e teclado; Start + Select pausa ou retoma.
+- **Jogo:** a entrada comum fica com o jogo. Select + R3 abre o teclado sem transformar o restante dos comandos em mouse.
+- **Troca de modo:** dois toques rápidos em Select / View alternam Desktop e Jogo.
+- **Teclado aberto:** R3 solicita o fechamento nos dois modos.
 
-## Mouse e teclado
+Conectar, reconectar, trocar de modo ou retomar exige soltar os botões e centralizar os analógicos. Desconexão e encerramento liberam cliques mantidos. O comportamento de cada gesto está em [`control.rs`](../src/control.rs).
 
-### Mouse
+## Onboarding
 
-O analógico esquerdo move o ponteiro e o direito rola a página. A oferece clique e arrasto; B oferece clique direito. O direcional envia setas, X envia Enter e Y envia Escape. L3 envia Super/Windows, L1 envia Tab e R1 abre o seletor de janelas; repita R1 para avançar, X confirma e Y cancela.
+O percurso principal reúne cinco grupos: mouse, rolagem, teclado, modos e conclusão. Abrir, digitar e fechar o teclado são práticas distintas dentro do mesmo grupo. O usuário avança explicitamente; concluir uma prática ou uma demonstração não troca de lição sozinho.
 
-A velocidade do ponteiro e a zona morta podem ser ajustadas no painel. Esses ajustes valem para a sessão.
+Clique direito, arrasto, seletor de janelas, captura/tela cheia e pausa têm um percurso opcional próprio, acessível por **Aprender mais**. Voltar e continuar seguem o percurso atual.
 
-### Teclado visual
+As práticas usam os mesmos mapeamentos, mas consomem suas ações localmente. O teclado da demonstração compartilha o renderizador do teclado próprio. Ele não representa todos os layouts nativos do Windows ou COSMIC.
 
-Pressione **R3** — o analógico direito — para abrir ou fechar o teclado. O direcional move a seleção e o botão inferior digita. Os demais botões fazem Backspace, Enter, Escape, espaço, Tab ou alternam Shift.
+## Integração por plataforma
 
-O teclado usa o desenho QWERTY ANSI e mantém o foco no aplicativo anterior. Quando o aplicativo informa a posição do campo focado, o teclado tenta aparecer perto dele; caso contrário, usa a posição configurada no painel. O app consulta apenas a geometria do campo, não o texto digitado.
-
-O teclado também tem ajustes próprios: largura, posição, opacidade e repetição do direcional. Com ele aberto, **Start** abre a tela de ajustes; Start retorna à digitação e salva. R3 fecha e salva. Ctrl, Alt e Super combinam com a próxima tecla; Shift vale para a próxima tecla e Caps mantém maiúsculas.
-
-![Prévia do teclado visual](../keyboard-preview.png)
-
-## Controles
-
-Os rótulos abaixo descrevem também as posições físicas dos quatro botões frontais. O painel mostra os nomes correspondentes para Xbox, PlayStation e Switch.
-
-| Comando                        | Ação                                   |
-| ------------------------------ | -------------------------------------- |
-| Analógico esquerdo             | Mover ponteiro                         |
-| Analógico direito, cima/baixo  | Rolar                                  |
-| Direcional                     | Enviar setas; segurar para repetir      |
-| Inferior — A / ✕ / B no Switch | Clique esquerdo; segurar para arrastar |
-| Direito — B / ○ / A no Switch  | Clique direito                         |
-| Esquerdo — X / □ / Y no Switch | Enter                                   |
-| Superior — Y / △ / X no Switch | Escape                                  |
-| R3                             | Abrir ou fechar teclado                |
-| L3                             | Super / tecla Windows                  |
-| LB / L1                        | Tab                                    |
-| RB / R1                        | Abre o seletor Alt+Tab; R1 avança; X confirma; Y cancela |
-| Segure Start/Menu + LB / L1    | Print Screen · inicia a captura do sistema |
-| Segure Start/Menu + RB / R1    | F11 · alternar tela cheia              |
-| Start + Select / Menu + View   | Pausar ou retomar; solte e centralize para retomar |
-
-No teclado visual, o botão inferior digita a tecla selecionada; o direito apaga; o esquerdo envia Enter; o superior envia Escape; L3 envia espaço; L1 envia Tab; R1 alterna Shift.
-
-Escape cancela menus ou diálogos. Ele não volta no histórico do navegador.
-
-## Controles e perfis
-
-O modo automático escolhe um controle reconhecido com perfil e procura novamente quando ele desconecta. Também é possível selecionar um dispositivo no painel. A seleção explícita vale para a sessão; se o controle for desconectado, selecione-o novamente após reconectar.
-
-Controles conhecidos usam os perfis disponíveis. Se o app detectar um modelo sem perfil, ele aparece no seletor e o painel permite importar uma linha de mapeamento. O perfil importado é salvo para próximas sessões. Um assistente visual para configurar controles desconhecidos está no [roadmap](roadmap.md).
-
-Depois de conectar, reconectar ou retomar, solte os botões e centralize os analógicos. Pausar, desconectar ou encerrar o app libera cliques que estejam sendo mantidos.
-
-## Painel e bandeja
-
-O painel informa se o controle foi reconhecido, qual modo está ativo e se o app está pausado. Ele também concentra seleção de controle, velocidade, zona morta, perfis e personalização do teclado.
-
-Fechar ou recolher o painel mantém o controle funcionando na bandeja, perto do relógio, quando o ambiente oferece essa área. Use **Abrir painel**, **Recolher painel** ou **Encerrar aplicativo** no menu da bandeja. Se a bandeja não puder ser criada, o painel avisa e fechar a janela encerra o app para que ele não fique inacessível.
-
-## Integração com cada sistema
-
-| Sistema       | Ponteiro e teclas                                                    | Teclado visual                                                             |
-| ------------- | -------------------------------------------------------------------- | -------------------------------------------------------------------------- |
-| Windows       | Entrada nativa do Windows                                            | Janela transparente, sempre no topo, sem ativação e com cliques repassados |
-| Linux/X11     | Dispositivos virtuais de entrada                                     | Janela transparente, sem ativação e com cliques repassados                 |
-| Linux/Wayland | Dispositivos virtuais, sujeitos a permissões e ao compositor         | Camada `wlr-layer-shell`, sem foco de teclado e sem região de mouse        |
+| Ambiente       | Entrada comum                                                   | Teclado                                                                       |
+| -------------- | --------------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| Windows        | Entrada nativa; filtro de teclas virtuais de gamepad no Desktop | Teclado de toque do Windows, com tentativa de layout Gamepad                  |
+| Linux/X11      | Mouse e teclado virtuais via `uinput`                           | Viewport próprio sem ativação                                                 |
+| COSMIC/Wayland | Mouse e teclado virtuais via `uinput`                           | Serviço `cosmic-osk`, quando disponível; alternativa própria quando suportada |
+| Outros Wayland | Mouse e teclado virtuais via `uinput`                           | Camada própria, quando há `wlr-layer-shell`                                   |
 
 ### Windows
 
-O Windows pode bloquear entrada enviada a aplicativos executados com privilégios mais altos que o Gamepad Desktop.
+O app acompanha a visibilidade do teclado por `IFrameworkInputPane`. Aberturas e fechamentos são serializados para acompanhar as animações. Quando o layout Gamepad foi aceito, o fechamento tenta `CoreInputView.TryHide`; se o pedido não for aceito, usa a alternativa de alternância do sistema.
+
+Durante a sessão de teclado nativo, o backend evita duplicar as entradas do controle. Fora dela, o filtro do Desktop bloqueia a faixa de teclas virtuais de gamepad do Windows, mas não bloqueia programas que leem o dispositivo diretamente. Os detalhes e a verificação manual estão em [windows-gamepad-navigation.md](windows-gamepad-navigation.md).
+
+O Windows pode rejeitar entrada enviada para programas com privilégios maiores que o app. Os layouts compacto e grande precisam de validação física, inclusive para confirmar o fechamento com R3.
 
 ### Linux
 
-O mouse e o envio de teclas usam `uinput`, que depende do acesso aos dispositivos de entrada e a `/dev/uinput`. O app não altera essas permissões automaticamente. No Linux, AT-SPI também pode informar a posição do campo focado para posicionar o teclado visual.
+`uinput` exige acesso a `/dev/uinput` e aos dispositivos usados pelo app. Essas permissões não são alteradas automaticamente.
 
-Em Wayland, o teclado visual requer que o compositor ofereça `wlr-layer-shell`. O GNOME Wayland não oferece esse protocolo, então o app informa que o teclado visual não está disponível. Alguns aplicativos não publicam coordenadas globais confiáveis; nesses casos o teclado usa a posição manual escolhida no painel.
+No COSMIC, as ações `show`/`hide` do serviço nativo controlam o teclado. O app evita injetar uma segunda sequência de digitação. Mudanças externas e abertura automática ainda precisam de validação.
 
-No Linux, o teclado envia códigos de tecla QWERTY US. O layout do sistema interpreta esses códigos; portanto, teclas especiais e acentos podem não corresponder ao desenho ANSI.
+O teclado próprio em Wayland requer `wlr-layer-shell`. O GNOME Wayland não oferece esse caminho. AT-SPI fornece a posição do campo quando ela é confiável; na ausência dela, o teclado usa a posição configurada. O desenho é QWERTY US e os códigos enviados são interpretados pelo layout do sistema.
+
+## Painel, preferências e encerramento
+
+O painel informa conexão, modo, pausa, falhas e versão. A bandeja permite recolher, reabrir ou encerrar. Sem bandeja disponível, fechar o painel encerra o processo para evitar uma sessão inacessível.
+
+As preferências ficam em `gamepad-navigator/preferences.json` e `gamepad-navigator/keyboard.json`, sob `$XDG_CONFIG_HOME` ou `~/.config` no Linux e `%APPDATA%` no Windows. O nome dessa pasta preserva a compatibilidade com versões anteriores.
+
+A interface inicia em 125%. O cursor inicia em 100% do tamanho encontrado no sistema e só é alterado quando a preferência de escala exige. A personalização do cursor é persistida após uma alteração explícita; preferências antigas com o padrão de 135% são normalizadas.
+
+Encerrar solicita a parada do worker de entrada e aguarda sua conclusão. Esse caminho inclui limpeza das entradas, teclado, gravações em andamento e restauração dos cursores. A UI pode mostrar **Finalizando a limpeza antes de fechar…** enquanto espera. A restauração do cursor é repetida em caso de erro; falhas persistentes mantêm o processo aguardando.
 
 ## Como iniciar no Linux
 
-Ainda não há instalador Linux. Para executar a partir deste repositório, instale Rust, CMake e um compilador C/C++ e rode na raiz:
+Há pacotes `.deb` e `.tar.gz` nas [releases](https://github.com/andrecrjr/GamepadDesktop/releases/latest). As instruções de instalação e permissões estão no [guia de uso](../README.md#linux).
+
+Para compilar e executar, instale as dependências do [guia de desenvolvimento](development.md#executar-localmente) e rode na raiz:
 
 ```sh
-cargo run --manifest-path desktop/Cargo.toml
+make desktop-run
 ```
-
-A sessão também precisa permitir acesso ao controle e aos dispositivos de entrada usados pelo app. A compilação padrão inclui SDL3 a partir do código-fonte. Com SDL3 instalada no sistema, é possível compilar sem essa inclusão usando `--no-default-features`.
-
-## Preferências e execução
-
-As preferências do teclado são salvas entre execuções em `~/.config/gamepad-navigator/keyboard.json` (ou sob `$XDG_CONFIG_HOME`) no Linux e em `%APPDATA%/gamepad-navigator/keyboard.json` no Windows.
-
-Para gerar uma prévia do teclado com o renderizador real no Linux:
-
-```sh
-cargo run --manifest-path desktop/Cargo.toml --example keyboard_preview
-```
-
-Os arquivos PPM gerados vão para `/tmp/gamepad-keyboard-preview`.
-
-## Estado e limites conhecidos
-
-- Mouse, entrada por teclado e teclado visual estão implementados. Ainda precisam de validação física em Windows 11, Linux/X11 e outros compositores Wayland.
-- O suporte às setas depende do aplicativo ativo. Ainda não há uma matriz publicada de compatibilidade por aplicativo.
-- O teclado tem desenho QWERTY ANSI. No Linux, layouts diferentes podem produzir símbolos diferentes e o suporte a caracteres acentuados ainda precisa ser validado.
-- O teclado visual em Wayland não está disponível em compositores sem `wlr-layer-shell`.
-- Os pacotes Windows e Linux x64 são anexados às releases do Gamepad Desktop. O build não substitui a validação com controle físico em cada sistema.
-- A pesquisa e as decisões do teclado estão em [keyboard-research.md](keyboard-research.md); o que falta concluir está em [roadmap.md](roadmap.md).
 
 ## Mapa interno
 
-| Arquivo                                     | Responsabilidade                                     |
-| ------------------------------------------- | ---------------------------------------------------- |
-| `src/main.rs`                               | Painel, comandos e ciclo de vida da janela           |
-| `src/gamepads.rs`                           | Detecção, seleção e perfis dos controles             |
-| `src/control.rs`                            | Mapeamento dos botões e analógicos para comandos     |
-| `src/runtime.rs`                            | Loop de controle que continua ativo em segundo plano |
-| `src/focused_input.rs` e `src/placement.rs` | Geometria do campo focado e posição do teclado       |
-| `src/keyboard.rs`                           | Teclas, ajustes e estado de digitação                |
-| `src/linux.rs` e `src/windows.rs`           | Integração específica com os sistemas                |
-| `src/wayland_keyboard.rs`                   | Camada do teclado visual no Wayland                  |
-| `src/tray.rs`                               | Ícone e comandos da bandeja                          |
+| Arquivo                                                                                                             | Responsabilidade                                |
+| ------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------- |
+| [`main.rs`](../src/main.rs) e [`tray.rs`](../src/tray.rs)                                                           | Painel, bandeja e ciclo de vida                 |
+| [`gamepads.rs`](../src/gamepads.rs)                                                                                 | Leitura SDL3, seleção e perfis                  |
+| [`control.rs`](../src/control.rs)                                                                                   | Mapeamentos, modos e recuperação                |
+| [`runtime.rs`](../src/runtime.rs)                                                                                   | Worker de entrada, estado e persistência        |
+| [`onboarding.rs`](../src/onboarding.rs) e [`onboarding_view.rs`](../src/onboarding_view.rs)                         | Percursos, prática, demonstração e apresentação |
+| [`keyboard.rs`](../src/keyboard.rs) e [`keyboard_view.rs`](../src/keyboard_view.rs)                                 | Modelo e desenho do teclado próprio             |
+| [`linux.rs`](../src/linux.rs) e [`windows.rs`](../src/windows.rs)                                                   | Adaptadores do sistema                          |
+| [`windows_touch_keyboard.rs`](../src/windows_touch_keyboard.rs) e [`cosmic_keyboard.rs`](../src/cosmic_keyboard.rs) | Integrações de teclado nativo                   |
+| [`wayland_keyboard.rs`](../src/wayland_keyboard.rs)                                                                 | Camada do teclado próprio em Wayland            |
+| [`focused_input.rs`](../src/focused_input.rs) e [`placement.rs`](../src/placement.rs)                               | Geometria e posicionamento do teclado próprio   |
+| [`updater.rs`](../src/updater.rs) e [`startup.rs`](../src/startup.rs)                                               | Atualização e início com a sessão               |
 
-## Validação
-
-Os comandos de qualidade do app são:
-
-```sh
-cargo test --manifest-path desktop/Cargo.toml
-cargo fmt --manifest-path desktop/Cargo.toml --check
-cargo clippy --manifest-path desktop/Cargo.toml --all-targets -- -D warnings
-```
-
-Os testes de integração com dispositivos físicos são optativos e dependem de permissões, `/dev/uinput` e de um controle conectado. A validação manual deve incluir navegação, foco, digitação, recuperação após desconexão e uso da bandeja em cada ambiente-alvo.
-
-## Referências
-
-- [UI Automation no Windows](https://learn.microsoft.com/en-us/windows/win32/winauto/entry-uiautocore-overview)
-- [AT-SPI2 no Linux](https://wiki.freedesktop.org/www/Accessibility/AT-SPI2/)
-- [SDL3: controles e perfis](https://wiki.libsdl.org/SDL3/CategoryGamepad)
-- [Protocolo `wlr-layer-shell`](https://wayland.app/protocols/wlr-layer-shell-unstable-v1)
-- [Dispositivos virtuais `uinput`](https://docs.rs/evdev/latest/evdev/uinput/)
-- [Pesquisa do teclado visual](keyboard-research.md)
-- [Roadmap do projeto](roadmap.md)
+Builds e testes automatizados verificam compilação e comportamento modelado. A compatibilidade física por controle, sistema e aplicativo segue no [roadmap](roadmap.md).

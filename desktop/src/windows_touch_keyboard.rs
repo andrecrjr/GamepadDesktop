@@ -102,7 +102,13 @@ impl WindowsTouchKeyboard {
                     .unwrap_or(false)
             });
         }
-        if should_toggle_system_keyboard(visible, self.gamepad_view_active) {
+        let hidden = !visible
+            && self.gamepad_view_active
+            && self
+                .core_input_view
+                .as_ref()
+                .is_some_and(|view| view.TryHide().unwrap_or(false));
+        if !hidden && should_toggle_system_keyboard(visible, self.gamepad_view_active) {
             // CoreInputView is tied to this app's window; the desktop keyboard
             // must be dismissed through the system for another foreground app.
             Self::toggle().map_err(|error| error.to_string())?;

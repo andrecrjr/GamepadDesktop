@@ -374,6 +374,12 @@ impl eframe::App for GamepadDesktopApp {
                         .expect("desktop runtime lock")
                         .reopen_onboarding();
                 }
+                if ui.button(locale.text(Text::TourLearnMore)).clicked() {
+                    self.desktop
+                        .lock()
+                        .expect("desktop runtime lock")
+                        .onboarding_command(gamepad_desktop::onboarding::Command::LearnMore);
+                }
                 ui.separator();
                 show_app_version(ui);
             });

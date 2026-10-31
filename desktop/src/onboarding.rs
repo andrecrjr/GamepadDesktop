@@ -52,22 +52,17 @@ impl Step {
 
     pub fn chapter(self) -> (usize, usize, usize) {
         match self {
-            Self::Welcome => (0, 1, 1),
-            Self::Modes => (1, 1, 1),
-            Self::Pointer => (2, 1, 5),
-            Self::Click => (2, 2, 5),
-            Self::RightClick => (2, 3, 5),
-            Self::Drag => (2, 4, 5),
-            Self::Scroll => (2, 5, 5),
-            Self::OpenKeyboard => (3, 1, 3),
-            Self::Type => (3, 2, 3),
-            Self::CloseKeyboard => (3, 3, 3),
-            Self::Game => (4, 1, 5),
-            Self::Desktop => (4, 2, 5),
-            Self::WindowSwitcher => (4, 3, 5),
-            Self::DesktopShortcuts => (4, 4, 5),
-            Self::Pause => (4, 5, 5),
-            Self::Ready => (5, 1, 1),
+            Self::Welcome => (0, 0, 2),
+            Self::Pointer => (0, 1, 2),
+            Self::Click => (0, 2, 2),
+            Self::Scroll => (1, 1, 1),
+            Self::OpenKeyboard => (2, 1, 3),
+            Self::Type => (2, 2, 3),
+            Self::CloseKeyboard => (2, 3, 3),
+            Self::Modes | Self::Game => (3, 1, 2),
+            Self::Desktop => (3, 2, 2),
+            Self::Ready => (4, 1, 1),
+            _ => (0, 1, 1),
         }
     }
 
@@ -81,6 +76,7 @@ pub enum Command {
     Next,
     Back,
     ToggleDemo,
+    LearnMore,
     Skip,
     Finish(ControlMode),
     Language(crate::i18n::Locale),
@@ -90,6 +86,7 @@ pub enum Command {
 #[derive(Clone)]
 pub struct Onboarding {
     pub step: Step,
+    pub extra_lessons: bool,
     pub complete: bool,
     pub demonstrating: bool,
     pub cursor: [f32; 2],
@@ -115,6 +112,7 @@ impl Default for Onboarding {
     fn default() -> Self {
         let mut tour = Self {
             step: Step::Welcome,
+            extra_lessons: false,
             complete: false,
             demonstrating: false,
             cursor: [0.3, 0.5],
@@ -141,14 +139,75 @@ impl Default for Onboarding {
 }
 
 impl Onboarding {
+    const PRIMARY: &[Step] = &[
+        Step::Welcome,
+        Step::Pointer,
+        Step::Click,
+        Step::Scroll,
+        Step::OpenKeyboard,
+        Step::Type,
+        Step::CloseKeyboard,
+        Step::Game,
+        Step::Desktop,
+        Step::Ready,
+    ];
+    const EXTRA: &[Step] = &[
+        Step::RightClick,
+        Step::Drag,
+        Step::WindowSwitcher,
+        Step::DesktopShortcuts,
+        Step::Pause,
+        Step::Ready,
+    ];
+
+    pub fn lesson(step: Step) -> Self {
+        let mut tour = Self {
+            step,
+            extra_lessons: Self::EXTRA.contains(&step) && step != Step::Ready,
+            ..Self::default()
+        };
+        tour.reset_lesson();
+        tour
+    }
+
+    fn route(&self) -> &'static [Step] {
+        if self.extra_lessons {
+            Self::EXTRA
+        } else {
+            Self::PRIMARY
+        }
+    }
+
     pub fn next(&mut self) {
-        self.step = Step::ALL[(self.step as usize + 1).min(Step::ALL.len() - 1)];
+        let route = self.route();
+        let index = route
+            .iter()
+            .position(|step| *step == self.step)
+            .unwrap_or(0);
+        self.step = route[(index + 1).min(route.len() - 1)];
         self.reset_lesson();
     }
 
     pub fn back(&mut self) {
-        self.step = Step::ALL[(self.step as usize).saturating_sub(1)];
+        let route = self.route();
+        let index = route
+            .iter()
+            .position(|step| *step == self.step)
+            .unwrap_or(0);
+        self.step = route[index.saturating_sub(1)];
         self.reset_lesson();
+    }
+
+    pub fn progress(&self) -> (usize, usize) {
+        if self.extra_lessons {
+            let index = Self::EXTRA
+                .iter()
+                .position(|step| *step == self.step)
+                .unwrap_or(0);
+            (index.min(4), 5)
+        } else {
+            (self.step.chapter().0, 5)
+        }
     }
 
     pub fn toggle_demo(&mut self) {

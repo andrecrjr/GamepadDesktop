@@ -77,10 +77,7 @@ fn window_and_desktop_shortcut_lessons_only_change_the_local_preview() {
     let mut controller = MouseController::default();
     update_buttons(&mut state, &mut controller, &[]);
 
-    let mut tour = Onboarding::default();
-    while tour.step != Step::WindowSwitcher {
-        tour.next();
-    }
+    let tour = Onboarding::lesson(Step::WindowSwitcher);
     state.onboarding = Some(tour);
 
     for expected in [1, 2] {
@@ -158,10 +155,7 @@ fn reopening_the_tour_releases_a_drag_and_requires_neutral_before_resuming() {
 #[test]
 fn switching_modes_in_a_lesson_preserves_the_real_mode_and_pause_setting() {
     let mut state = RuntimeState::default();
-    let mut tour = Onboarding::default();
-    while tour.step != Step::Game {
-        tour.next();
-    }
+    let tour = Onboarding::lesson(Step::Game);
     state.onboarding = Some(tour);
     let settings = state.settings;
     let mut controller = MouseController::default();
