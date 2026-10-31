@@ -16,6 +16,36 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  desktop-version:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    outputs:
+      version: ${{ steps.plan.outputs.version }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Test desktop release versioning
+        run: node --test desktop/scripts/release-version.test.mjs
+      - name: Seed initial development release baseline
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: |
+          if ! git tag --list 'desktop-v*' | grep -q .; then
+            git tag desktop-v0.0.0 "$(git rev-list --max-parents=0 HEAD)"
+          fi
+      - name: Plan desktop release version
+        id: plan
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: node desktop/scripts/plan-release.mjs
+
   brand-assets:
     runs-on: ubuntu-latest
     steps:
@@ -31,10 +61,18 @@ jobs:
         working-directory: extension
 
   build-linux:
-    needs: brand-assets
+    needs: [brand-assets, desktop-version]
     runs-on: ubuntu-22.04
+    env:
+      GAMEPAD_DESKTOP_RELEASE_VERSION: ${{ needs.desktop-version.outputs.version }}
     steps:
       - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+      - name: Apply desktop release version
+        if: needs.desktop-version.outputs.version != ''
+        run: node desktop/scripts/release-version.mjs
       - name: Install Rust
         run: |
           rustup toolchain install stable --profile minimal --component rustfmt --component clippy
@@ -56,7 +94,7 @@ jobs:
           printf '%s\n' "$GITHUB_SHA" > desktop/dist/GamepadDesktop-Linux-x64.build
           cargo deb --manifest-path desktop/Cargo.toml --no-build --deb-revision "$GITHUB_RUN_NUMBER" --output desktop/dist/GamepadDesktop-Linux-x64.deb
       - name: Upload Linux package
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        if: github.event_name == 'push' && needs.desktop-version.outputs.version != ''
         uses: actions/upload-artifact@v7
         with:
           name: GamepadDesktop-Linux-x64
@@ -67,10 +105,18 @@ jobs:
           if-no-files-found: error
 
   build-windows:
-    needs: brand-assets
+    needs: [brand-assets, desktop-version]
     runs-on: windows-latest
+    env:
+      GAMEPAD_DESKTOP_RELEASE_VERSION: ${{ needs.desktop-version.outputs.version }}
     steps:
       - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+      - name: Apply desktop release version
+        if: needs.desktop-version.outputs.version != ''
+        run: node desktop/scripts/release-version.mjs
       - name: Install Rust
         run: |
           rustup toolchain install stable --profile minimal
@@ -81,7 +127,7 @@ jobs:
           New-Item -ItemType Directory -Force -Path desktop/dist | Out-Null
           Copy-Item -LiteralPath desktop/target/release/gamepad-desktop.exe -Destination desktop/dist/GamepadDesktop-Windows-x64.exe -Force
       - name: Upload Windows executable
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        if: github.event_name == 'push' && needs.desktop-version.outputs.version != ''
         uses: actions/upload-artifact@v7
         with:
           name: GamepadDesktop-Windows-x64
@@ -89,13 +135,16 @@ jobs:
           if-no-files-found: error
 
   release:
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.desktop-version.outputs.version != ''
     needs:
+      - desktop-version
       - build-linux
       - build-windows
     runs-on: ubuntu-latest
     permissions:
       contents: write
+    env:
+      GAMEPAD_DESKTOP_RELEASE_VERSION: ${{ needs.desktop-version.outputs.version }}
     steps:
       - uses: actions/checkout@v7
         with:

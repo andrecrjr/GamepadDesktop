@@ -89,4 +89,21 @@ As cópias geradas são versionadas para o build Rust funcionar sem Node. O ICO 
 
 Commits convencionais em `main` alimentam o semantic-release. As releases usam tags `desktop-v*` e anexam o executável Windows x64, os pacotes Linux `.deb`/`.tar.gz` e os metadados de revisão usados pelo atualizador. A extensão tem validação e empacotamento próprios.
 
+A versão é definida antes de compilar:
+
+1. O job `desktop-version` consulta o semantic-release em modo de simulação e compartilha a próxima versão.
+2. Os builds Windows e Linux aplicam essa versão em `desktop/Cargo.toml` e no pacote correspondente em `desktop/Cargo.lock`.
+3. O app usa `CARGO_PKG_VERSION` no rodapé; o mesmo valor alimenta os metadados do executável Windows e o pacote `.deb`.
+4. Antes de publicar, o plugin local verifica se a versão calculada ainda corresponde à dos builds. Uma diferença interrompe a release.
+5. O commit de release inclui o changelog e os dois arquivos Cargo, mantendo os próximos checkouts sincronizados.
+
+Pull requests e commits que não exigem release continuam passando pelos builds, sem publicação. A versão da extensão e a do pacote npm de ferramentas permanecem independentes.
+
+Os testes da automação usam repositórios Git temporários locais e não publicam releases. Para executá-los, use Node.js 24 com as dependências da raiz:
+
+```sh
+npm ci
+node --test desktop/scripts/release-version.test.mjs
+```
+
 A configuração está no [workflow desktop](../../.github/workflows/desktop.yml) e em [`.releaserc.json`](../../.releaserc.json).

@@ -748,13 +748,19 @@ fn keyboard_viewport_builder(
 }
 
 fn main_viewport_builder(windows: bool) -> egui::ViewportBuilder {
-    egui::ViewportBuilder::default()
+    let builder = egui::ViewportBuilder::default()
         .with_title(APP_NAME)
         .with_icon(gamepad_icon_data(512))
-        .with_inner_size([860.0, 760.0])
+        .with_inner_size([1000.0, 860.0])
+        .with_clamp_size_to_monitor_size(true)
         .with_min_inner_size([660.0, 500.0])
         // eframe shares the root GL config with child viewports.
-        .with_transparent(windows)
+        .with_transparent(windows);
+    if windows {
+        builder.with_position([16.0, 16.0])
+    } else {
+        builder
+    }
 }
 
 fn show_app_version(ui: &mut egui::Ui) {
