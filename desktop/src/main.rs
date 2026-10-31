@@ -342,6 +342,8 @@ impl eframe::App for GamepadDesktopApp {
                         .expect("desktop runtime lock")
                         .reopen_onboarding();
                 }
+                ui.separator();
+                show_app_version(ui);
             });
         });
         let page = self.page;
@@ -670,6 +672,10 @@ fn main_viewport_builder(windows: bool) -> egui::ViewportBuilder {
         .with_transparent(windows)
 }
 
+fn show_app_version(ui: &mut egui::Ui) {
+    ui.small(concat!("v", env!("CARGO_PKG_VERSION")));
+}
+
 #[cfg(test)]
 mod overlay_tests {
     use super::*;
@@ -913,6 +919,18 @@ fn main() -> eframe::Result {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn footer_renders_the_current_package_version() {
+        let mut output = egui::Context::default().run_ui(Default::default(), show_app_version);
+        let expected = format!("v{}", env!("CARGO_PKG_VERSION"));
+        output.textures_delta.clear();
+
+        assert!(output.shapes.iter().any(|shape| matches!(
+            &shape.shape,
+            egui::Shape::Text(text) if text.galley.job.text.as_str() == expected
+        )));
+    }
 
     #[cfg(any(target_os = "linux", target_os = "windows"))]
     #[test]
