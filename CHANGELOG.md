@@ -1,3 +1,26 @@
+# [0.6.0](https://github.com/andrecrjr/GamepadDesktop/compare/desktop-v0.5.0...desktop-v0.6.0) (2026-11-01)
+
+
+### Bug Fixes
+
+* **desktop:** apply Windows cursor scaling and keyboard close ([1040cbe](https://github.com/andrecrjr/GamepadDesktop/commit/1040cbea09c223f0ed19f244ac56d390329346b7))
+* improve analog precision and magnetic target detection ([c999048](https://github.com/andrecrjr/GamepadDesktop/commit/c999048ef0392ee971f3649fd630f241718951c8))
+* synchronize desktop release and build versions ([98f25ef](https://github.com/andrecrjr/GamepadDesktop/commit/98f25ef9dca6f7ae0862506d9a86dfdc1758412d))
+
+
+### Features
+
+* add configurable magnetic cursor and improve keyboard placement ([417a71c](https://github.com/andrecrjr/GamepadDesktop/commit/417a71cae65cb2e0115a35618edd4dded3f97f26))
+* **desktop:** improve cursor and keyboard controls ([8303fce](https://github.com/andrecrjr/GamepadDesktop/commit/8303fcee3ce25ef30ab3931a75e91760f860fa83))
+* **desktop:** improve gamepad desktop controls ([a3d4ccf](https://github.com/andrecrjr/GamepadDesktop/commit/a3d4ccf5ef42aff86235d64d46d18930ed8b3e28))
+* **desktop:** improve Windows gamepad integration ([112c3d3](https://github.com/andrecrjr/GamepadDesktop/commit/112c3d3dc95f130a8430a26cf266f397eea3e797))
+* **desktop:** integrate COSMIC keyboard and simplify Windows releases ([4bea35a](https://github.com/andrecrjr/GamepadDesktop/commit/4bea35a5a24a56b434464c0a6f4b61ddc110cf8f))
+* **desktop:** show version in footer ([485a360](https://github.com/andrecrjr/GamepadDesktop/commit/485a360197d718510a0aac82e4567d99dfd9bb00))
+* improve landing with controller animation and social previews ([203c7c2](https://github.com/andrecrjr/GamepadDesktop/commit/203c7c27c6d3543ce2f498a697278ff51c147845))
+* streamline desktop onboarding and product documentation ([c713071](https://github.com/andrecrjr/GamepadDesktop/commit/c71307175ad1573874980b57aad091e8a9b24e95))
+* support Linux updates and Debian packages ([2b8e23d](https://github.com/andrecrjr/GamepadDesktop/commit/2b8e23d27fc9c109273a31fd3e1e3195865e4540))
+* wait for cleanup before closing ([20a13f0](https://github.com/andrecrjr/GamepadDesktop/commit/20a13f0092315dd445da835df8f36b94f80cc1f9))
+
 # [0.5.0](https://github.com/andrecrjr/GamepadDesktop/compare/desktop-v0.4.0...desktop-v0.5.0) (2026-10-25)
 
 
