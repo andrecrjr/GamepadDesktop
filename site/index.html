@@ -154,48 +154,74 @@
               <li>Browsers &amp; desktop apps</li>
             </ul>
           </div>
+          <figure class="hero-visual" id="heroVisual" aria-labelledby="visual-caption">
+            <div class="hero-visual-glow" aria-hidden="true"></div>
+            <div class="hero-visual-shine" aria-hidden="true"></div>
+            <div class="controller-status" aria-live="polite">
+              <div class="controller-badge" id="controllerBadge">
+                <span class="status-dot"></span>
+                <span class="badge-text" id="controllerStatusText">Desktop Controller Demo</span>
+              </div>
+              <div class="interactive-hint" id="interactiveHint">
+                <span class="hint-text">Gamepad Supported</span>
+              </div>
+            </div>
 
-          <figure class="hero-visual" aria-labelledby="visual-caption">
-            <svg class="controller-demo" viewBox="0 0 520 320" fill="none" aria-hidden="true">
-              <ellipse cx="260" cy="297" rx="156" ry="18" fill="#02060d" opacity=".45" />
+            <svg class="controller-demo" id="controllerSvg" viewBox="0 0 520 320" fill="none" aria-hidden="true">
+              <ellipse class="controller-shadow" cx="260" cy="297" rx="156" ry="18" fill="#02060d" opacity=".45" />
               <path
+                class="controller-body"
                 d="M182 83h156c22 0 39 15 45 37l29 110c7 27-6 45-27 45-13 0-24-8-35-22l-26-34H196l-26 34c-11 14-22 22-35 22-21 0-34-18-27-45l29-110c6-22 23-37 45-37Z"
                 fill="#1b293c"
                 stroke="#52667f"
                 stroke-width="3"
               />
               <path
+                class="controller-accent-line"
                 d="M182 91h156c18 0 31 12 36 31"
                 stroke="#8fffc7"
                 stroke-width="2"
                 opacity=".7"
               />
-              <rect x="232" y="100" width="56" height="39" rx="7" fill="#0a111f" stroke="#40536a" />
-              <path d="m251 109 0 22 6-6 9 1Z" fill="#a899ff" />
+              <g class="demo-guide-btn" id="demoGuideBtn" role="button" aria-label="Xbox Guide Button">
+                <rect x="232" y="100" width="56" height="39" rx="7" fill="#0a111f" stroke="#40536a" />
+                <path class="demo-guide-icon" d="m251 109 0 22 6-6 9 1Z" fill="#8fffc7" />
+              </g>
               <circle cx="175" cy="150" r="29" fill="#0c1422" stroke="#40536a" stroke-width="2" />
-              <g class="demo-stick">
+              <g class="demo-stick demo-stick-left" id="demoStickLeft">
                 <circle cx="175" cy="150" r="20" fill="#31465b" stroke="#8fffc7" stroke-width="2" />
                 <circle cx="175" cy="150" r="12" stroke="#506a7f" />
               </g>
               <path
+                class="demo-dpad"
+                id="demoDpad"
+                role="button"
+                aria-label="D-Pad"
                 d="M212 177h12v12h12v12h-12v12h-12v-12h-12v-12h12Z"
                 fill="#0a111f"
                 stroke="#52667f"
                 stroke-width="2"
               />
               <circle cx="302" cy="195" r="20" fill="#0c1422" stroke="#52667f" stroke-width="2" />
+              <g class="demo-stick-right" id="demoStickRight">
+                <circle cx="302" cy="195" r="14" fill="#31465b" stroke="#52667f" stroke-width="1.5" />
+                <circle cx="302" cy="195" r="8" stroke="#40536a" />
+              </g>
               <g class="demo-face-buttons">
-                <circle cx="345" cy="126" r="12" fill="#26354a" stroke="#a899ff" />
-                <circle cx="321" cy="150" r="12" fill="#26354a" stroke="#a899ff" />
-                <circle cx="369" cy="150" r="12" fill="#26354a" stroke="#a899ff" />
-                <circle class="demo-button-a" cx="345" cy="174" r="12" fill="#8fffc7" />
+                <circle class="demo-btn demo-btn-y" id="demoBtnY" cx="345" cy="126" r="12" fill="#26354a" stroke="#a899ff" role="button" aria-label="Button Y" />
+                <circle class="demo-btn demo-btn-x" id="demoBtnX" cx="321" cy="150" r="12" fill="#26354a" stroke="#a899ff" role="button" aria-label="Button X" />
+                <circle class="demo-btn demo-btn-b" id="demoBtnB" cx="369" cy="150" r="12" fill="#26354a" stroke="#a899ff" role="button" aria-label="Button B" />
+                <circle class="demo-btn demo-button-a demo-btn-a" id="demoBtnA" cx="345" cy="174" r="12" fill="#8fffc7" role="button" aria-label="Button A" />
+                <circle class="demo-button-a-pulse" id="demoBtnAPulse" cx="345" cy="174" r="12" fill="none" stroke="#8fffc7" stroke-width="2" opacity="0" />
                 <g
+                  class="demo-btn-labels"
                   fill="#c9bdff"
                   text-anchor="middle"
                   dominant-baseline="central"
                   font-size="11"
                   font-family="sans-serif"
                   font-weight="700"
+                  pointer-events="none"
                 >
                   <text x="345" y="126">Y</text>
                   <text x="321" y="150">X</text>
@@ -203,7 +229,7 @@
                   <text x="345" y="174" fill="#0a111f">A</text>
                 </g>
               </g>
-              <g class="demo-thumb-left" fill="#dca78b" stroke="#68493f" stroke-width="3">
+              <g class="demo-thumb-left" id="demoThumbLeft" fill="#dca78b" stroke="#68493f" stroke-width="3">
                 <path
                   d="M151 191c-7-5-8-14-3-22l16-25c5-8 15-10 22-5 8 5 10 14 5 22l-16 25c-5 8-16 11-24 5Z"
                 />
@@ -219,7 +245,7 @@
                 />
                 <path d="m154 177 12 8" stroke="#b57965" stroke-width="2" />
               </g>
-              <g class="demo-thumb-right" fill="#dca78b" stroke="#68493f" stroke-width="3">
+              <g class="demo-thumb-right" id="demoThumbRight" fill="#dca78b" stroke="#68493f" stroke-width="3">
                 <path
                   d="M381 222c7-6 7-15 2-23l-13-21c-5-8-15-10-22-5-8 5-10 15-5 23l13 21c5 8 17 11 25 5Z"
                 />
@@ -240,15 +266,6 @@
               A little stick movement. Your whole desktop.
             </figcaption>
           </figure>
-          <svg class="demo-cursor" viewBox="0 0 32 36" aria-hidden="true" hidden>
-            <path
-              d="M3 3v25l7-7 5 11 6-3-5-10 11-2Z"
-              fill="#f4f7ff"
-              stroke="#080b16"
-              stroke-width="2"
-              stroke-linejoin="round"
-            />
-          </svg>
         </section>
 
         <section class="benefits" id="benefits" aria-labelledby="benefits-title">
@@ -457,6 +474,18 @@
           >View source on GitHub <span aria-hidden="true">↗</span></a
         >
       </footer>
+    </div>
+    <div class="demo-cursor-container" id="demoCursorContainer" aria-hidden="true" hidden>
+      <svg class="demo-cursor" viewBox="0 0 32 36" aria-hidden="true">
+        <path
+          d="M3 3v25l7-7 5 11 6-3-5-10 11-2Z"
+          fill="#f4f7ff"
+          stroke="#080b16"
+          stroke-width="2"
+          stroke-linejoin="round"
+        />
+      </svg>
+      <div class="demo-cursor-ripple" id="demoCursorRipple" aria-hidden="true"></div>
     </div>
     <script type="module" src="./landing-animation.js"></script>
   </body>
