@@ -10,6 +10,9 @@ import { prepare, setCargoVersion, verifyRelease } from './release-version.mjs';
 
 const script = fileURLToPath(new URL('./release-version.mjs', import.meta.url));
 const planner = fileURLToPath(new URL('./plan-release.mjs', import.meta.url));
+const releaseAnalyzer = JSON.parse(
+  readFileSync(new URL('../../.releaserc.json', import.meta.url), 'utf8'),
+).plugins[0];
 
 /** @param {import('node:test').TestContext} t */
 function fixture(t) {
@@ -90,6 +93,7 @@ test('publication rejects an unplanned or different version before changing Carg
 for (const [message, expected] of [
   ['fix: repair keyboard dismissal', '0.5.1'],
   ['feat: add guided onboarding', '0.6.0'],
+  ['feat(site): improve landing animation', ''],
   ['feat: change the controller contract\n\nBREAKING CHANGE: controller bindings changed', '1.0.0'],
   ['chore: refresh documentation', ''],
 ]) {
@@ -110,7 +114,7 @@ for (const [message, expected] of [
         branches: ['main'],
         tagFormat: 'desktop-v${version}',
         repositoryUrl: pathToFileURL(remote).href,
-        plugins: ['@semantic-release/commit-analyzer', script],
+        plugins: [releaseAnalyzer, script],
       }),
     );
     git(['add', 'desktop', '.releaserc.json']);
@@ -159,7 +163,7 @@ test('publishes matching Cargo metadata and tag only after verifying the planned
       tagFormat: 'desktop-v${version}',
       repositoryUrl: pathToFileURL(remote).href,
       plugins: [
-        '@semantic-release/commit-analyzer',
+        releaseAnalyzer,
         script,
         ['@semantic-release/git', { assets: ['desktop/Cargo.toml', 'desktop/Cargo.lock'] }],
       ],
