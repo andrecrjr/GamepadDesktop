@@ -202,6 +202,57 @@ fn movement_is_independent_of_poll_rate_and_keeps_small_movements() {
 }
 
 #[test]
+fn short_partial_stick_touches_allow_fine_pointer_control() {
+    for (x, y) in [(0.5, 0.0), (-0.5, 0.0), (0.0, 0.5), (0.0, -0.5)] {
+        let (mut controller, mut settings) = ready();
+        let frame = GamepadFrame {
+            x,
+            y,
+            ..Default::default()
+        };
+        let mut displacement = (0, 0);
+        for _ in 0..8 {
+            for action in controller.update(Some(&frame), TICK, &mut settings) {
+                if let Action::Move(dx, dy) = action {
+                    displacement.0 += dx;
+                    displacement.1 += dy;
+                }
+            }
+        }
+        let distance = f64::from(displacement.0).hypot(f64::from(displacement.1));
+        assert!(
+            (1.0..=10.0).contains(&distance),
+            "{x}, {y}: {displacement:?}"
+        );
+        assert!(
+            controller
+                .update(Some(&GamepadFrame::default()), TICK, &mut settings)
+                .iter()
+                .all(|action| !matches!(action, Action::Move(_, _)))
+        );
+    }
+}
+
+#[test]
+fn full_stick_retains_the_configured_top_speed() {
+    let (mut controller, mut settings) = ready();
+    settings.speed = 1500.0;
+    let frame = GamepadFrame {
+        x: 1.0,
+        ..Default::default()
+    };
+    let mut distance = 0;
+    for _ in 0..100 {
+        for action in controller.update(Some(&frame), TICK, &mut settings) {
+            if let Action::Move(dx, _) = action {
+                distance += dx;
+            }
+        }
+    }
+    assert!((distance - 1500).abs() <= 1, "{distance}");
+}
+
+#[test]
 fn holding_a_drags_and_release_ends_the_click() {
     let (mut controller, mut settings) = ready();
     let mut frame = pressed(Button::South);

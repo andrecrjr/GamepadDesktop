@@ -312,7 +312,7 @@ catalog! {
     PreferencesSaveFailedPrefix => ("Could not save preferences: ", "No se pudo guardar la configuración: ", "Não foi possível salvar as configurações: ");
     ControlsAndAdjustments => ("Controller and adjustments", "Mando y ajustes", "Controle e ajustes");
     CursorScale => ("System pointer size", "Tamaño del cursor del sistema", "Tamanho do cursor do sistema");
-    MagneticCursorBeta => ("Magnetic cursor · BETA", "Cursor magnético · BETA", "Cursor magnético · BETA");
+    MagneticCursorBeta => ("Magnetic cursor · BETA · Experimental", "Cursor magnético · BETA · Experimental", "Cursor magnético · BETA · Experimental");
     EnableMagneticCursor => ("Attract cursor to nearby buttons", "Atraer el cursor a botones cercanos", "Atrair cursor para botões próximos");
     MagneticStrength => ("Attraction", "Atracción", "Atração");
     MagneticCenterHold => ("Center hold", "Retención en el centro", "Fixação no centro");

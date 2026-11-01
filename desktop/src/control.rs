@@ -545,8 +545,10 @@ impl MouseController {
         let seconds = elapsed.as_secs_f64().min(0.05);
         let x = axis_value(frame.x, settings.deadzone);
         let y = axis_value(frame.y, settings.deadzone);
-        let magnitude = x.hypot(y).max(1.0);
-        let speed = settings.speed.clamp(100.0, 2400.0);
+        let deflection = x.hypot(y);
+        let magnitude = deflection.max(1.0);
+        // Add precision near neutral while preserving full-deflection speed.
+        let speed = settings.speed.clamp(100.0, 2400.0) * deflection.min(1.0).sqrt();
         let dx = accumulate(&mut self.remainder[0], x / magnitude * speed * seconds);
         let dy = accumulate(&mut self.remainder[1], y / magnitude * speed * seconds);
         if dx != 0 || dy != 0 {

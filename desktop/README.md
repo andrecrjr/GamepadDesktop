@@ -75,15 +75,21 @@ In **Game** mode, use **Select / View + R3** to open the keyboard. While it is o
 
 The D-pad sends arrow keys to the active app on Linux. On Windows, it navigates the open keyboard and does not send regular arrow keys during desktop control.
 
-## Magnetic cursor · BETA
+Pointer movement uses a progressive response curve: light stick input gives finer control, while full deflection reaches the configured speed. Releasing the stick stops movement immediately. This applies with magnetic assistance on or off; scrolling and keyboard navigation keep their own response.
 
-On Windows, enable **Settings → Magnetic cursor · BETA** to gently steer controller movement toward visible, button-like rectangles near the cursor. A local screen scan runs at up to five times per second over a small cursor-centered region. Smaller candidates get extra reach. It is off by default. Physical mouse movement, dragging, pause, Game mode, onboarding, and the on-screen keyboard do not use this assistance.
+## Magnetic cursor · BETA · Experimental
+
+On Windows, enable **Settings → Magnetic cursor · BETA · Experimental** to gently steer controller movement toward visible, button-like rectangles near the cursor. A local screen scan runs at up to five times per second over a small cursor-centered region. Smaller candidates get extra reach. It is off by default. Physical mouse movement, dragging, pause, Game mode, onboarding, and the on-screen keyboard do not use this assistance.
 
 - **Attraction** adjusts the pull toward a target's center.
-- **Center hold** resists gentle stick movement at the center. Set it to 0% to disable holding; push harder to leave.
+- **Center hold** resists gentle stick movement and brief accidental flicks at the center. A moderate push held in the same direction releases after 80 ms at 50%; a strong push releases immediately. Higher values increase the release delay. Set it to 0% to disable holding.
 - **Detection sensitivity** adjusts edge contrast requirements. Higher values accept fainter edges and may include more false targets.
 
 All three default to 50%, preserving the original behavior. Existing preferences retain their attraction and inherit that same value for center hold. **Restore magnetic defaults** resets the three controls without turning the feature on or off. Nearby detected icons inside rectangles can be selected independently; elsewhere, the outer rectangle remains a target.
+
+The current target is favored over similarly close candidates to reduce switching caused by small stick or detection variations. A clearly better candidate can still take over. Moving away, losing the target, changing windows, or disabling assistance clears the selection.
+
+Small rectangular targets are checked at native screen resolution before the broader, downscaled scan. This preserves thin borders and center coordinates, including small rectangles inside larger controls. The native pass accepts shapes from 4 to 40 pixels per side, checks contrast along all four edges, and uses the detection sensitivity setting. Open edges and isolated dots are rejected.
 
 This experimental feature uses local image processing without AI or accessibility APIs. It may miss flat buttons or mistake cards, fields, and borders for buttons. Captured pixels are processed in memory and never saved. Windows behavior still needs validation with a physical controller.
 

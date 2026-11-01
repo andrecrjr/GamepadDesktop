@@ -59,21 +59,28 @@ fn assisted_motion(
     targets: &[crate::placement::Rect],
     radius: f64,
     settings: MagneticCursorSettings,
+    selected: &mut Option<crate::placement::Rect>,
 ) -> (i32, i32) {
     let strength = settings.strength;
     let (mx, my) = (f64::from(movement.0), f64::from(movement.1));
     let speed = mx.hypot(my);
-    if strength == 0 || speed == 0.0 || !radius.is_finite() || speed >= radius {
+    if strength == 0 || !radius.is_finite() || speed >= radius {
+        *selected = None;
+        return movement;
+    }
+    if speed == 0.0 {
         return movement;
     }
     // Hold a reached center against gentle input; a clear push releases it.
     if speed <= f64::from(settings.center_hold.unwrap_or(strength).min(100)) / 25.0
-        && targets.iter().any(|target| {
+        && let Some(target) = targets.iter().find(|target| {
             target.valid() && cursor == (target.x + target.width / 2, target.y + target.height / 2)
         })
     {
+        *selected = Some(*target);
         return (0, 0);
     }
+    let previous = *selected;
     let target = targets
         .iter()
         .filter(|button| button.valid())
@@ -100,7 +107,11 @@ fn assisted_motion(
             let size_factor = (48.0 / short_side).sqrt().clamp(1.0, 2.4);
             let target_radius = radius * size_factor;
             // Rank centers so a containing rectangle cannot hide a nearby icon.
-            let priority = dx.hypot(dy) / target_radius;
+            let mut priority = dx.hypot(dy) / target_radius;
+            // A challenger must be clearly better, not just win a noisy near-tie.
+            if previous.is_some_and(|previous| same_target(previous, *button)) {
+                priority *= 0.75;
+            }
             (distance < target_radius).then_some((
                 dx,
                 dy,
@@ -108,12 +119,15 @@ fn assisted_motion(
                 target_radius,
                 priority,
                 size_factor,
+                *button,
             ))
         })
         .min_by(|a, b| a.4.total_cmp(&b.4));
-    let Some((dx, dy, distance, target_radius, _, size_factor)) = target else {
+    let Some((dx, dy, distance, target_radius, _, size_factor, button)) = target else {
+        *selected = None;
         return movement;
     };
+    *selected = Some(button);
     let (dx, dy) = (dx - mx, dy - my);
     let remaining = dx.hypot(dy);
     if remaining == 0.0 {
@@ -132,8 +146,164 @@ fn assisted_motion(
 }
 
 #[cfg(any(target_os = "windows", test))]
+fn same_target(previous: crate::placement::Rect, current: crate::placement::Rect) -> bool {
+    let Some(overlap) = previous.intersection(current) else {
+        return false;
+    };
+    let intersection = i64::from(overlap.width) * i64::from(overlap.height);
+    let union = i64::from(previous.width) * i64::from(previous.height)
+        + i64::from(current.width) * i64::from(current.height)
+        - intersection;
+    intersection * 2 > union
+}
+
+#[cfg(any(target_os = "windows", test))]
+fn detect_small_rectangles(
+    gray: &image::GrayImage,
+    sensitivity: u8,
+) -> Vec<crate::placement::Rect> {
+    use crate::placement::Rect;
+    use imageproc::contours::{BorderType, find_contours};
+
+    let mut inverted = gray.clone();
+    image::imageops::invert(&mut inverted);
+    let threshold = detection_threshold(25, sensitivity) as u8;
+    let mut targets = Vec::new();
+    // Detect both dark-on-light and light-on-dark outlines at native resolution.
+    for source in [gray, &inverted] {
+        let mut mask = imageproc::contrast::adaptive_threshold(
+            source,
+            7,
+            detection_threshold(8, sensitivity) as i32,
+        );
+        image::imageops::invert(&mut mask);
+        for contour in find_contours::<i32>(&mask) {
+            if contour.border_type != BorderType::Outer || contour.points.len() < 8 {
+                continue;
+            }
+            let left = contour.points.iter().map(|p| p.x).min().unwrap();
+            let right = contour.points.iter().map(|p| p.x).max().unwrap();
+            let top = contour.points.iter().map(|p| p.y).min().unwrap();
+            let bottom = contour.points.iter().map(|p| p.y).max().unwrap();
+            let (width, height) = (right - left + 1, bottom - top + 1);
+            if !(4..=40).contains(&width)
+                || !(4..=40).contains(&height)
+                || width > height * 4
+                || height > width * 4
+                || left < 2
+                || top < 2
+                || right + 2 >= gray.width() as i32
+                || bottom + 2 >= gray.height() as i32
+            {
+                continue;
+            }
+            let edge = |x: i32, y: i32, dx: i32, dy: i32| {
+                let pixel = gray.get_pixel(x as u32, y as u32)[0];
+                // Check two outside pixels so the inside of an outline is not a second target.
+                (1..=2).all(|step| {
+                    pixel
+                        .abs_diff(gray.get_pixel((x + dx * step) as u32, (y + dy * step) as u32)[0])
+                        >= threshold
+                })
+            };
+            let horizontal = |y, dy| {
+                (left + 1..right).filter(|x| edge(*x, y, 0, dy)).count() * 10
+                    >= (width - 2) as usize * 9
+            };
+            let vertical = |x, dx| {
+                (top + 1..bottom).filter(|y| edge(x, *y, dx, 0)).count() * 10
+                    >= (height - 2) as usize * 9
+            };
+            if !horizontal(top, -1)
+                || !horizontal(bottom, 1)
+                || !vertical(left, -1)
+                || !vertical(right, 1)
+            {
+                continue;
+            }
+            let target = Rect {
+                x: left,
+                y: top,
+                width,
+                height,
+            };
+            if !targets.contains(&target) {
+                targets.push(target);
+            }
+            if targets.len() == 32 {
+                return targets;
+            }
+        }
+    }
+    targets
+}
+
+#[cfg(any(target_os = "windows", test))]
 fn detection_threshold(base: u32, sensitivity: u8) -> u32 {
     (f64::from(base) * (1.5 - f64::from(sensitivity.clamp(1, 100)) / 100.0)).round() as u32
+}
+
+#[cfg(any(target_os = "windows", test))]
+#[derive(Default)]
+struct CenterHold {
+    center: Option<(i32, i32)>,
+    push_started: Option<std::time::Instant>,
+    last_push: Option<(std::time::Instant, (i32, i32))>,
+}
+
+#[cfg(any(target_os = "windows", test))]
+impl CenterHold {
+    fn holds(
+        &mut self,
+        cursor: (i32, i32),
+        movement: (i32, i32),
+        targets: &[crate::placement::Rect],
+        settings: MagneticCursorSettings,
+        now: std::time::Instant,
+    ) -> bool {
+        use std::time::Duration;
+
+        let strength = settings.center_hold.unwrap_or(settings.strength).min(100);
+        let speed = f64::from(movement.0).hypot(f64::from(movement.1));
+        let centered = targets.iter().any(|target| {
+            target.valid() && cursor == (target.x + target.width / 2, target.y + target.height / 2)
+        });
+        if settings.strength == 0 || strength == 0 || speed == 0.0 || !centered {
+            *self = Self::default();
+            return false;
+        }
+        if self.center != Some(cursor) {
+            *self = Self {
+                center: Some(cursor),
+                ..Self::default()
+            };
+        }
+        if speed <= f64::from(strength) / 25.0 {
+            self.push_started = None;
+            self.last_push = None;
+            return true;
+        }
+        if speed >= 4.0 + f64::from(strength) / 6.25 {
+            *self = Self::default();
+            return false;
+        }
+        // Only sustained input in a consistent direction counts toward release.
+        let continuing = self.last_push.is_some_and(|(last, previous)| {
+            let previous_speed = f64::from(previous.0).hypot(f64::from(previous.1));
+            let alignment = f64::from(previous.0) * f64::from(movement.0)
+                + f64::from(previous.1) * f64::from(movement.1);
+            now.saturating_duration_since(last) <= Duration::from_millis(32)
+                && alignment >= previous_speed * speed * 0.8
+        });
+        let started = if continuing {
+            self.push_started.unwrap_or(now)
+        } else {
+            now
+        };
+        self.push_started = Some(started);
+        self.last_push = Some((now, movement));
+        now.saturating_duration_since(started) < Duration::from_millis(u64::from(strength) * 8 / 5)
+    }
 }
 
 #[cfg(test)]
@@ -164,7 +334,116 @@ mod tests {
                 strength,
                 ..Default::default()
             },
+            &mut None,
         )
+    }
+
+    #[test]
+    fn small_outlines_keep_their_native_bounds_on_light_and_dark_backgrounds() {
+        for (width, height) in [(4, 4), (5, 7), (9, 5), (15, 9), (31, 21)] {
+            for (x, y) in [(11, 13), (12, 14)] {
+                for (ink, background) in [(20, 220), (220, 20)] {
+                    let target = Rect {
+                        x,
+                        y,
+                        width,
+                        height,
+                    };
+                    let gray = small_outline(target, ink, background);
+                    assert_eq!(
+                        detect_small_rectangles(&gray, 50),
+                        vec![target],
+                        "{target:?}, ink {ink}"
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn native_detection_keeps_small_targets_inside_rectangles() {
+        let outer = Rect {
+            x: 301,
+            y: 307,
+            width: 40,
+            height: 24,
+        };
+        let inner = Rect {
+            x: 320,
+            y: 314,
+            width: 7,
+            height: 5,
+        };
+        let mut gray = image::GrayImage::from_pixel(640, 640, image::Luma([220]));
+        for rect in [outer, inner] {
+            for y in rect.y..rect.y + rect.height {
+                for x in rect.x..rect.x + rect.width {
+                    if x == rect.x
+                        || x == rect.x + rect.width - 1
+                        || y == rect.y
+                        || y == rect.y + rect.height - 1
+                    {
+                        gray.put_pixel(x as u32, y as u32, image::Luma([20]));
+                    }
+                }
+            }
+        }
+        let targets = detect_small_rectangles(&gray, 50);
+        assert_eq!(targets.len(), 2, "{targets:?}");
+        assert!(targets.contains(&outer));
+        assert!(targets.contains(&inner));
+    }
+
+    #[test]
+    fn small_outline_detection_respects_sensitivity() {
+        let target = Rect {
+            x: 11,
+            y: 13,
+            width: 7,
+            height: 9,
+        };
+        let gray = small_outline(target, 180, 200);
+        assert!(detect_small_rectangles(&gray, 50).is_empty());
+        assert_eq!(detect_small_rectangles(&gray, 100), vec![target]);
+    }
+
+    #[test]
+    fn small_outline_detection_rejects_blank_images_dots_and_open_edges() {
+        let target = Rect {
+            x: 11,
+            y: 13,
+            width: 7,
+            height: 9,
+        };
+        let mut gray = small_outline(target, 20, 220);
+        for y in target.y..target.y + target.height {
+            gray.put_pixel(
+                (target.x + target.width - 1) as u32,
+                y as u32,
+                image::Luma([220]),
+            );
+        }
+        assert!(detect_small_rectangles(&gray, 50).is_empty());
+        let mut gray = image::GrayImage::from_pixel(64, 64, image::Luma([220]));
+        assert!(detect_small_rectangles(&gray, 50).is_empty());
+        gray.put_pixel(11, 13, image::Luma([20]));
+        assert!(detect_small_rectangles(&gray, 50).is_empty());
+    }
+
+    fn small_outline(target: Rect, ink: u8, background: u8) -> image::GrayImage {
+        let mut gray = image::GrayImage::from_pixel(64, 64, image::Luma([background]));
+        for y in target.y..target.y + target.height {
+            for x in target.x..target.x + target.width {
+                if x == target.x
+                    || x == target.x + target.width - 1
+                    || y == target.y
+                    || y == target.y + target.height - 1
+                {
+                    gray.put_pixel(x as u32, y as u32, image::Luma([ink]));
+                }
+            }
+        }
+        gray
     }
 
     #[test]
@@ -237,7 +516,7 @@ mod tests {
             ..Default::default()
         };
         assert_eq!(
-            super::assisted_motion((110, 110), (3, 0), &[BUTTON], 180.0, settings),
+            super::assisted_motion((110, 110), (3, 0), &[BUTTON], 180.0, settings, &mut None),
             (0, 0)
         );
         let settings = MagneticCursorSettings {
@@ -246,10 +525,11 @@ mod tests {
             ..settings
         };
         assert_eq!(
-            super::assisted_motion((110, 110), (1, 0), &[BUTTON], 180.0, settings),
+            super::assisted_motion((110, 110), (1, 0), &[BUTTON], 180.0, settings, &mut None),
             (1, 0)
         );
-        let approach = super::assisted_motion((90, 100), (8, 0), &[BUTTON], 180.0, settings);
+        let approach =
+            super::assisted_motion((90, 100), (8, 0), &[BUTTON], 180.0, settings, &mut None);
         assert_eq!(
             approach,
             super::assisted_motion(
@@ -260,7 +540,8 @@ mod tests {
                 MagneticCursorSettings {
                     center_hold: Some(100),
                     ..settings
-                }
+                },
+                &mut None,
             )
         );
     }
@@ -288,6 +569,239 @@ mod tests {
         .normalized();
         assert_eq!(settings.center_hold, Some(0));
         assert_eq!(settings.detection_sensitivity, 100);
+    }
+
+    #[test]
+    fn a_brief_stick_flick_does_not_release_the_center() {
+        let mut hold = CenterHold::default();
+        let settings = MagneticCursorSettings::default();
+        let now = std::time::Instant::now();
+        assert!(hold.holds((110, 110), (6, 0), &[BUTTON], settings, now));
+        assert!(hold.holds(
+            (110, 110),
+            (6, 0),
+            &[BUTTON],
+            settings,
+            now + std::time::Duration::from_millis(8)
+        ));
+        // Releasing the stick between flicks must not accumulate escape pressure.
+        assert!(hold.holds(
+            (110, 110),
+            (6, 0),
+            &[BUTTON],
+            settings,
+            now + std::time::Duration::from_millis(100)
+        ));
+    }
+
+    #[test]
+    fn sustained_pressure_releases_at_the_same_time_at_different_poll_rates() {
+        for interval in [4, 8, 16] {
+            let mut hold = CenterHold::default();
+            let now = std::time::Instant::now();
+            for elapsed in (0..80).step_by(interval) {
+                assert!(hold.holds(
+                    (110, 110),
+                    (6, 0),
+                    &[BUTTON],
+                    MagneticCursorSettings::default(),
+                    now + std::time::Duration::from_millis(elapsed as u64)
+                ));
+            }
+            assert!(!hold.holds(
+                (110, 110),
+                (6, 0),
+                &[BUTTON],
+                MagneticCursorSettings::default(),
+                now + std::time::Duration::from_millis(80)
+            ));
+        }
+    }
+
+    #[test]
+    fn strong_push_disabled_hold_and_missing_targets_release_immediately() {
+        let now = std::time::Instant::now();
+        let mut hold = CenterHold::default();
+        let settings = MagneticCursorSettings::default();
+        for movement in [(16, 0), (-16, 0), (0, 16), (0, -16)] {
+            assert!(!hold.holds((110, 110), movement, &[BUTTON], settings, now));
+        }
+        assert!(!hold.holds((110, 110), (6, 0), &[], settings, now));
+        assert!(!hold.holds((111, 110), (6, 0), &[BUTTON], settings, now));
+        assert!(!hold.holds(
+            (110, 110),
+            (1, 0),
+            &[BUTTON],
+            MagneticCursorSettings {
+                center_hold: Some(0),
+                ..settings
+            },
+            now
+        ));
+    }
+
+    #[test]
+    fn reversing_direction_restarts_the_release_delay() {
+        let mut hold = CenterHold::default();
+        let now = std::time::Instant::now();
+        for elapsed in (0..80).step_by(8) {
+            assert!(hold.holds(
+                (110, 110),
+                (6, 0),
+                &[BUTTON],
+                MagneticCursorSettings::default(),
+                now + std::time::Duration::from_millis(elapsed)
+            ));
+        }
+        assert!(hold.holds(
+            (110, 110),
+            (-6, 0),
+            &[BUTTON],
+            MagneticCursorSettings::default(),
+            now + std::time::Duration::from_millis(80)
+        ));
+    }
+
+    #[test]
+    fn center_hold_setting_controls_the_release_delay() {
+        for strength in [25, 50, 100] {
+            let mut hold = CenterHold::default();
+            let now = std::time::Instant::now();
+            let settings = MagneticCursorSettings {
+                center_hold: Some(strength),
+                ..Default::default()
+            };
+            let release_ms = u64::from(strength) * 8 / 5;
+            for elapsed in (0..release_ms).step_by(8) {
+                assert!(hold.holds(
+                    (110, 110),
+                    (6, 0),
+                    &[BUTTON],
+                    settings,
+                    now + std::time::Duration::from_millis(elapsed)
+                ));
+            }
+            assert!(!hold.holds(
+                (110, 110),
+                (6, 0),
+                &[BUTTON],
+                settings,
+                now + std::time::Duration::from_millis(release_ms)
+            ));
+        }
+    }
+
+    #[test]
+    fn target_selection_resists_small_variations_and_detection_reordering() {
+        let lower = Rect { y: 122, ..BUTTON };
+        let settings = MagneticCursorSettings::default();
+        let mut selected = Some(BUTTON);
+        let expected = assisted_motion((95, 122), (4, 0), &[BUTTON], 180.0, 50);
+        let movement = super::assisted_motion(
+            (95, 122),
+            (4, 0),
+            &[lower, BUTTON],
+            180.0,
+            settings,
+            &mut selected,
+        );
+        assert_eq!(movement, expected);
+        assert_eq!(selected, Some(BUTTON));
+    }
+
+    #[test]
+    fn a_small_detection_shift_is_still_the_same_target() {
+        let lower = Rect { y: 122, ..BUTTON };
+        let shifted = Rect { x: 101, ..BUTTON };
+        let mut selected = Some(BUTTON);
+        let expected = assisted_motion((95, 122), (4, 0), &[shifted], 180.0, 50);
+        assert_eq!(
+            super::assisted_motion(
+                (95, 122),
+                (4, 0),
+                &[lower, shifted],
+                180.0,
+                MagneticCursorSettings::default(),
+                &mut selected
+            ),
+            expected
+        );
+        assert_eq!(selected, Some(shifted));
+    }
+
+    #[test]
+    fn clear_direction_or_a_missing_target_allows_switching() {
+        let lower = Rect { y: 122, ..BUTTON };
+        for (cursor, movement, targets) in [
+            ((95, 130), (0, 4), vec![BUTTON, lower]),
+            ((95, 122), (4, 0), vec![lower]),
+        ] {
+            let mut selected = Some(BUTTON);
+            let expected = assisted_motion(cursor, movement, &[lower], 180.0, 50);
+            assert_eq!(
+                super::assisted_motion(
+                    cursor,
+                    movement,
+                    &targets,
+                    180.0,
+                    MagneticCursorSettings::default(),
+                    &mut selected
+                ),
+                expected
+            );
+            assert_eq!(selected, Some(lower));
+        }
+    }
+
+    #[test]
+    fn leaving_the_target_or_losing_detection_clears_selection() {
+        for (movement, targets) in [
+            ((-4, 0), vec![BUTTON]),
+            ((4, 0), vec![]),
+            ((180, 0), vec![BUTTON]),
+        ] {
+            let mut selected = Some(BUTTON);
+            assert_eq!(
+                super::assisted_motion(
+                    (95, 110),
+                    movement,
+                    &targets,
+                    180.0,
+                    MagneticCursorSettings::default(),
+                    &mut selected
+                ),
+                movement
+            );
+            assert_eq!(selected, None);
+        }
+    }
+
+    #[test]
+    fn a_nearby_icon_can_replace_its_parent_rectangle() {
+        let rectangle = Rect {
+            width: 200,
+            height: 60,
+            ..BUTTON
+        };
+        let icon = Rect {
+            x: 120,
+            y: 120,
+            width: 16,
+            height: 16,
+        };
+        let mut selected = Some(rectangle);
+        assert_eq!(
+            super::assisted_motion(
+                (117, 128),
+                (4, 1),
+                &[rectangle, icon],
+                180.0,
+                MagneticCursorSettings::default(),
+                &mut selected
+            ),
+            (11, 0)
+        );
+        assert_eq!(selected, Some(icon));
     }
 
     #[test]
@@ -566,10 +1080,16 @@ mod native {
     pub(crate) struct MagneticCursor {
         settings: MagneticCursorSettings,
         tracker: Option<Tracker>,
+        center_hold: CenterHold,
+        target: Option<Rect>,
     }
     impl MagneticCursor {
         pub(crate) fn configure(&mut self, settings: MagneticCursorSettings, active: bool) {
             let settings = settings.normalized();
+            if self.settings != settings || !active || !settings.enabled {
+                self.center_hold = CenterHold::default();
+                self.target = None;
+            }
             if self.settings.detection_sensitivity != settings.detection_sensitivity {
                 self.tracker = None;
             }
@@ -635,8 +1155,10 @@ mod native {
                         .expect("magnetic cursor diagnostics")
                 })
         }
-        pub(crate) fn adjust(&self, movement: (i32, i32)) -> (i32, i32) {
+        pub(crate) fn adjust(&mut self, movement: (i32, i32)) -> (i32, i32) {
             let Some(tracker) = &self.tracker else {
+                self.center_hold = CenterHold::default();
+                self.target = None;
                 return movement;
             };
             tracker
@@ -649,11 +1171,15 @@ mod native {
                 .as_ref()
                 .filter(|s| s.time.elapsed() < Duration::from_millis(600))
             else {
+                self.center_hold = CenterHold::default();
+                self.target = None;
                 return movement;
             };
             unsafe {
                 let mut point = POINT::default();
                 if GetPhysicalCursorPos(&mut point).is_err() {
+                    self.center_hold = CenterHold::default();
+                    self.target = None;
                     return movement;
                 }
                 let owner = GetAncestor(WindowFromPhysicalPoint(point), GA_ROOT);
@@ -662,16 +1188,34 @@ mod native {
                     || GetAsyncKeyState(i32::from(VK_LBUTTON.0)) < 0
                     || GetAsyncKeyState(i32::from(VK_RBUTTON.0)) < 0
                 {
+                    self.center_hold = CenterHold::default();
+                    self.target = None;
                     return movement;
                 }
                 let dpi = GetDpiForWindow(owner).max(96);
-                let adjusted = assisted_motion(
+                let adjusted = if self.center_hold.holds(
                     (point.x, point.y),
                     movement,
                     &snapshot.targets,
-                    180.0 * f64::from(dpi) / 96.0,
                     self.settings,
-                );
+                    Instant::now(),
+                ) {
+                    self.target = snapshot.targets.iter().copied().find(|target| {
+                        target.valid()
+                            && (point.x, point.y)
+                                == (target.x + target.width / 2, target.y + target.height / 2)
+                    });
+                    (0, 0)
+                } else {
+                    assisted_motion(
+                        (point.x, point.y),
+                        movement,
+                        &snapshot.targets,
+                        180.0 * f64::from(dpi) / 96.0,
+                        self.settings,
+                        &mut self.target,
+                    )
+                };
                 let correction = f64::from(adjusted.0 - movement.0)
                     .hypot(f64::from(adjusted.1 - movement.1))
                     .round() as u16;
@@ -958,7 +1502,23 @@ mod native {
                 break;
             }
         }
-        // Keep the broad rectangle pass cheap while preserving native pixels for tiny icons.
+        for target in detect_small_rectangles(&gray, sensitivity) {
+            if icons.len() >= MAX_CANDIDATES {
+                break;
+            }
+            let target = Rect {
+                x: origin.x + target.x,
+                y: origin.y + target.y,
+                ..target
+            };
+            if icons
+                .iter()
+                .all(|existing| overlap_ratio(*existing, target) < 0.7)
+            {
+                icons.push(target);
+            }
+        }
+        // Keep the broad rectangle pass cheap; small targets were checked at native resolution.
         let small = image::imageops::resize(
             &gray,
             (width / 2).max(1) as u32,
@@ -977,6 +1537,9 @@ mod native {
             sensitivity,
         );
         for rect in coarse {
+            if icons.len() >= MAX_CANDIDATES {
+                break;
+            }
             let rect = Rect {
                 x: origin.x + rect.x * 2,
                 y: origin.y + rect.y * 2,
