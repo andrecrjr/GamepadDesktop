@@ -75,6 +75,20 @@ In **Game** mode, use **Select / View + R3** to open the keyboard. While it is o
 
 The D-pad sends arrow keys to the active app on Linux. On Windows, it navigates the open keyboard and does not send regular arrow keys during desktop control.
 
+## Magnetic cursor · BETA
+
+On Windows, enable **Settings → Magnetic cursor · BETA** to gently steer controller movement toward visible, button-like rectangles near the cursor. A local screen scan runs at up to five times per second over a small cursor-centered region. Smaller candidates get extra reach. It is off by default. Physical mouse movement, dragging, pause, Game mode, onboarding, and the on-screen keyboard do not use this assistance.
+
+- **Attraction** adjusts the pull toward a target's center.
+- **Center hold** resists gentle stick movement at the center. Set it to 0% to disable holding; push harder to leave.
+- **Detection sensitivity** adjusts edge contrast requirements. Higher values accept fainter edges and may include more false targets.
+
+All three default to 50%, preserving the original behavior. Existing preferences retain their attraction and inherit that same value for center hold. **Restore magnetic defaults** resets the three controls without turning the feature on or off. Nearby detected icons inside rectangles can be selected independently; elsewhere, the outer rectangle remains a target.
+
+This experimental feature uses local image processing without AI or accessibility APIs. It may miss flat buttons or mistake cards, fields, and borders for buttons. Captured pixels are processed in memory and never saved. Windows behavior still needs validation with a physical controller.
+
+Expand **Diagnostics** in the same settings section to see how many visual candidates were found and the pixel adjustment from the last stick movement. Copy the report when troubleshooting.
+
 ## On-screen keyboard
 
 ### Windows
@@ -92,6 +106,8 @@ The integration tracks requests from the app and uses COSMIC's `show`/`hide` act
 ### The app's Linux keyboard
 
 Use the D-pad or left stick to choose a key. A types, B deletes, X sends Enter, and Y sends Escape. L3 inserts a space, L1 inserts Tab, and R1 toggles Shift. **Start** opens keyboard settings; **R3** closes it.
+
+The app's fallback keyboard follows the focused input when reliable accessibility geometry is available, including partially visible fields. It stays within the selected screen with a safety margin. Otherwise, it uses the configured top or bottom position.
 
 ![The app's Linux on-screen keyboard](keyboard-preview.png)
 

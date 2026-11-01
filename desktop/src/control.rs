@@ -133,6 +133,7 @@ pub struct ControlSettings {
     pub mode: ControlMode,
     pub speed: f64,
     pub deadzone: f64,
+    pub magnetic_cursor: crate::magnetic_cursor::MagneticCursorSettings,
 }
 
 impl Default for ControlSettings {
@@ -142,12 +143,14 @@ impl Default for ControlSettings {
             mode: ControlMode::Desktop,
             speed: 1800.0,
             deadzone: 0.2,
+            magnetic_cursor: Default::default(),
         }
     }
 }
 
 impl ControlSettings {
     pub fn normalized(mut self) -> Self {
+        self.magnetic_cursor = self.magnetic_cursor.normalized();
         self.speed = self.speed.clamp(100.0, 2400.0);
         self.deadzone = self.deadzone.clamp(0.05, 0.5);
         self

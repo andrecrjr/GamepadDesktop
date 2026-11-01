@@ -47,6 +47,7 @@ pub struct Platform {
     target_cache: [NativeDpadTargetCache; 4],
     paused_cursor: PausedCursor,
     cursor_scale: WindowsCursorScale,
+    pub(crate) magnetic_cursor: crate::magnetic_cursor::MagneticCursor,
     last_target_check: Option<Instant>,
     window_switcher: WindowSwitcherState,
 }
@@ -66,6 +67,7 @@ impl Platform {
             target_cache: Default::default(),
             paused_cursor: PausedCursor::default(),
             cursor_scale: WindowsCursorScale::new(),
+            magnetic_cursor: Default::default(),
             last_target_check: None,
             window_switcher: WindowSwitcherState::default(),
         })
@@ -252,7 +254,10 @@ impl Platform {
                 self.native_dpad.release_dpad();
                 return Ok(());
             }
-            Action::Move(x, y) => self.input.move_mouse(x, y, Coordinate::Rel),
+            Action::Move(x, y) => {
+                let (x, y) = self.magnetic_cursor.adjust((x, y));
+                self.input.move_mouse(x, y, Coordinate::Rel)
+            }
             Action::Scroll(amount) => self.input.scroll(amount, ScrollAxis::Vertical),
             Action::Mouse(button, pressed) => self.input.button(
                 match button {

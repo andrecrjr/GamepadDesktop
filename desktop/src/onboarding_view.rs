@@ -204,7 +204,12 @@ pub fn show(ui: &mut egui::Ui, state: &RuntimeState) -> Option<Command> {
                             });
                             ui.add_space(8.0);
                             let width = ui.available_width();
-                            if width >= 600.0 {
+                            if width >= 600.0
+                                && !matches!(
+                                    tour.step,
+                                    Step::OpenKeyboard | Step::Type | Step::CloseKeyboard
+                                )
+                            {
                                 ui.horizontal_top(|ui| {
                                     ui.allocate_ui(Vec2::new(190.0, 210.0), |ui| {
                                         controller_diagram(ui, tour.step)
@@ -564,7 +569,17 @@ fn controller_diagram(ui: &mut egui::Ui, step: Step) {
 }
 
 fn scene(ui: &mut egui::Ui, tour: &Onboarding, locale: Locale) {
-    let (rect, _) = ui.allocate_exact_size(Vec2::new(ui.available_width(), 210.0), Sense::hover());
+    let width = ui.available_width();
+    let height = if matches!(
+        tour.step,
+        Step::OpenKeyboard | Step::Type | Step::CloseKeyboard
+    ) {
+        // Header, typing field, bottom padding, and the keyboard's native aspect ratio.
+        34.0 + 38.0 + 12.0 + (width - 24.0).min(1000.0) * 258.0 / 720.0
+    } else {
+        210.0
+    };
+    let (rect, _) = ui.allocate_exact_size(Vec2::new(width, height), Sense::hover());
     let painter = ui.painter().with_clip_rect(rect);
     painter.rect_filled(rect, 12.0, PAGE_BACKGROUND);
     painter.rect_stroke(rect, 12.0, Stroke::new(1.0, BORDER), StrokeKind::Inside);
@@ -691,10 +706,18 @@ fn scene(ui: &mut egui::Ui, tour: &Onboarding, locale: Locale) {
                 TEXT,
             );
             if tour.keyboard().open {
-                let keyboard_rect =
-                    Rect::from_min_max(content.min + Vec2::new(0.0, 38.0), content.max);
+                let preview_width = content.width().min(1000.0);
+                let keyboard_rect = Rect::from_min_size(
+                    Pos2::new(
+                        content.center().x - preview_width / 2.0,
+                        content.top() + 38.0,
+                    ),
+                    Vec2::new(preview_width, content.height() - 38.0),
+                );
+                let mut keyboard = tour.keyboard().clone();
+                keyboard.settings.width = preview_width.ceil() as u16;
                 ui.scope_builder(egui::UiBuilder::new().max_rect(keyboard_rect), |ui| {
-                    super::keyboard_view::show(ui, tour.keyboard());
+                    super::keyboard_view::show(ui, &keyboard);
                 });
             } else {
                 egui::Image::new(gamepad_icons::image_source(
@@ -877,6 +900,42 @@ fn scene(ui: &mut egui::Ui, tour: &Onboarding, locale: Locale) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn keyboard_practice_keeps_letter_labels_readable_at_normal_window_widths() {
+        for width in [800.0, 1000.0] {
+            for step in [Step::Type, Step::CloseKeyboard] {
+                let context = egui::Context::default();
+                crate::configure_desktop_style(&context);
+                let mut state = RuntimeState::default();
+                state.onboarding = Some(Onboarding::lesson(step));
+                let mut output = context.run_ui(
+                    egui::RawInput {
+                        screen_rect: Some(Rect::from_min_size(Pos2::ZERO, Vec2::new(width, 860.0))),
+                        ..Default::default()
+                    },
+                    |ui| {
+                        show(ui, &state);
+                    },
+                );
+                output.textures_delta.clear();
+                let font_size = output
+                    .shapes
+                    .iter()
+                    .find_map(|shape| match &shape.shape {
+                        egui::Shape::Text(text) if text.galley.job.text == "Q" => {
+                            Some(text.galley.job.sections[0].format.font_id.size)
+                        }
+                        _ => None,
+                    })
+                    .expect("keyboard letter Q is rendered");
+                assert!(
+                    font_size >= 16.0,
+                    "keyboard labels too small at {width}, {step:?}: {font_size}"
+                );
+            }
+        }
+    }
 
     #[test]
     fn desktop_return_lesson_stays_focused_on_one_action_in_all_languages() {

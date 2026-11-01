@@ -37,6 +37,7 @@ pub struct RuntimeState {
     pub cursor_scale_range: CursorScaleRange,
     pub cursor_scale_error: Option<String>,
     pub settings: ControlSettings,
+    pub magnetic_cursor_diagnostics: crate::magnetic_cursor::MagneticCursorDiagnostics,
     pub start_on_login: bool,
     pub controller: Option<String>,
     pub controller_type: Option<GamepadType>,
@@ -516,6 +517,22 @@ fn sync_platform_controls(
         .native_mouse_state(connected);
     platform.update_mouse_mode(input_enabled, native_connected)?;
     platform.update_native_dpad_target();
+    #[cfg(target_os = "windows")]
+    {
+        let (settings, active) = {
+            let state = state.lock().expect("runtime state lock");
+            (
+                state.settings.magnetic_cursor,
+                input_enabled && native_connected && !state.keyboard.open,
+            )
+        };
+        platform.magnetic_cursor.configure(settings, active);
+        let diagnostics = platform.magnetic_cursor.diagnostics();
+        let mut state = state.lock().expect("runtime state lock");
+        if state.magnetic_cursor_diagnostics != diagnostics {
+            state.magnetic_cursor_diagnostics = diagnostics;
+        }
+    }
     Ok(())
 }
 

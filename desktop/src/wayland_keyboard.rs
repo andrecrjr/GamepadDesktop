@@ -198,6 +198,17 @@ impl WaylandKeyboardOverlay {
                 outputs
                     .iter()
                     .find(|(_, screen)| screen.contains_center(input))
+                    .or_else(|| {
+                        outputs
+                            .iter()
+                            .filter_map(|entry| {
+                                entry.1.intersection(input).map(|visible| {
+                                    (entry, i64::from(visible.width) * i64::from(visible.height))
+                                })
+                            })
+                            .max_by_key(|(_, area)| *area)
+                            .map(|(entry, _)| entry)
+                    })
             })
             .or_else(|| {
                 outputs
