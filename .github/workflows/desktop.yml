@@ -16,6 +16,36 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  desktop-version:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    outputs:
+      version: ${{ steps.plan.outputs.version }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Test desktop release versioning
+        run: node --test desktop/scripts/release-version.test.mjs
+      - name: Seed initial development release baseline
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: |
+          if ! git tag --list 'desktop-v*' | grep -q .; then
+            git tag desktop-v0.0.0 "$(git rev-list --max-parents=0 HEAD)"
+          fi
+      - name: Plan desktop release version
+        id: plan
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: node desktop/scripts/plan-release.mjs
+
   brand-assets:
     runs-on: ubuntu-latest
     steps:
@@ -31,10 +61,18 @@ jobs:
         working-directory: extension
 
   build-linux:
-    needs: brand-assets
-    runs-on: ubuntu-latest
+    needs: [brand-assets, desktop-version]
+    runs-on: ubuntu-22.04
+    env:
+      GAMEPAD_DESKTOP_RELEASE_VERSION: ${{ needs.desktop-version.outputs.version }}
     steps:
       - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+      - name: Apply desktop release version
+        if: needs.desktop-version.outputs.version != ''
+        run: node desktop/scripts/release-version.mjs
       - name: Install Rust
         run: |
           rustup toolchain install stable --profile minimal --component rustfmt --component clippy
@@ -42,7 +80,9 @@ jobs:
       - name: Install Linux dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y build-essential cmake pkg-config libasound2-dev libudev-dev libx11-dev libxcursor-dev libxrandr-dev libxi-dev libxinerama-dev libxkbcommon-dev libxkbcommon-x11-dev libwayland-dev libegl1-mesa-dev libdbus-1-dev libatspi2.0-dev
+          sudo apt-get install -y build-essential cmake dpkg-dev pkg-config libasound2-dev libudev-dev libx11-dev libxcursor-dev libxrandr-dev libxi-dev libxinerama-dev libxkbcommon-dev libxkbcommon-x11-dev libwayland-dev libegl1-mesa-dev libdbus-1-dev libatspi2.0-dev
+      - name: Install cargo-deb
+        run: cargo install cargo-deb --version 3.8.0 --locked
       - run: cargo fmt --manifest-path desktop/Cargo.toml -- --check
       - run: cargo clippy --manifest-path desktop/Cargo.toml --all-targets -- -D warnings
       - run: cargo test --manifest-path desktop/Cargo.toml
@@ -51,44 +91,60 @@ jobs:
         run: |
           mkdir -p desktop/dist
           tar -C desktop/target/release -czf desktop/dist/GamepadDesktop-Linux-x64.tar.gz gamepad-desktop
+          printf '%s\n' "$GITHUB_SHA" > desktop/dist/GamepadDesktop-Linux-x64.build
+          cargo deb --manifest-path desktop/Cargo.toml --no-build --deb-revision "$GITHUB_RUN_NUMBER" --output desktop/dist/GamepadDesktop-Linux-x64.deb
       - name: Upload Linux package
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        if: github.event_name == 'push' && needs.desktop-version.outputs.version != ''
         uses: actions/upload-artifact@v7
         with:
           name: GamepadDesktop-Linux-x64
-          path: desktop/dist/GamepadDesktop-Linux-x64.tar.gz
+          path: |
+            desktop/dist/GamepadDesktop-Linux-x64.tar.gz
+            desktop/dist/GamepadDesktop-Linux-x64.deb
+            desktop/dist/GamepadDesktop-Linux-x64.build
           if-no-files-found: error
 
   build-windows:
-    needs: brand-assets
+    needs: [brand-assets, desktop-version]
     runs-on: windows-latest
+    env:
+      GAMEPAD_DESKTOP_RELEASE_VERSION: ${{ needs.desktop-version.outputs.version }}
     steps:
       - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+      - name: Apply desktop release version
+        if: needs.desktop-version.outputs.version != ''
+        run: node desktop/scripts/release-version.mjs
       - name: Install Rust
         run: |
           rustup toolchain install stable --profile minimal
           rustup default stable
       - run: cargo build --manifest-path desktop/Cargo.toml --release
-      - name: Package Windows x64
+      - name: Prepare Windows x64 executable
         run: |
           New-Item -ItemType Directory -Force -Path desktop/dist | Out-Null
-          Compress-Archive -LiteralPath desktop/target/release/gamepad-desktop.exe -DestinationPath desktop/dist/GamepadDesktop-Windows-x64.zip -Force
-      - name: Upload Windows package
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+          Copy-Item -LiteralPath desktop/target/release/gamepad-desktop.exe -Destination desktop/dist/GamepadDesktop-Windows-x64.exe -Force
+      - name: Upload Windows executable
+        if: github.event_name == 'push' && needs.desktop-version.outputs.version != ''
         uses: actions/upload-artifact@v7
         with:
           name: GamepadDesktop-Windows-x64
-          path: desktop/dist/GamepadDesktop-Windows-x64.zip
+          path: desktop/dist/GamepadDesktop-Windows-x64.exe
           if-no-files-found: error
 
   release:
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.desktop-version.outputs.version != ''
     needs:
+      - desktop-version
       - build-linux
       - build-windows
     runs-on: ubuntu-latest
     permissions:
       contents: write
+    env:
+      GAMEPAD_DESKTOP_RELEASE_VERSION: ${{ needs.desktop-version.outputs.version }}
     steps:
       - uses: actions/checkout@v7
         with:

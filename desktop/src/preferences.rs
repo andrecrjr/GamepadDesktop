@@ -1,6 +1,10 @@
 use std::path::PathBuf;
 
-use crate::{control::ControlSettings, i18n::Locale};
+use crate::{
+    control::ControlSettings,
+    cursor_scale::{CursorScale, LEGACY_DEFAULT_CURSOR_SCALE, MIN_CURSOR_SCALE},
+    i18n::Locale,
+};
 
 /// Global interface scale, kept bounded so controls remain reachable.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
@@ -44,9 +48,17 @@ impl UiScale {
 pub struct DesktopPreferences {
     pub locale: Locale,
     pub ui_scale: UiScale,
+    #[serde(skip_serializing_if = "is_default_cursor_scale")]
+    pub cursor_scale: CursorScale,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cursor_scale_customized: Option<bool>,
     pub controls: ControlSettings,
     pub start_on_login: bool,
     pub onboarding_completed: bool,
+}
+
+fn is_default_cursor_scale(scale: &CursorScale) -> bool {
+    scale.percent() == MIN_CURSOR_SCALE
 }
 
 impl Default for DesktopPreferences {
@@ -54,6 +66,8 @@ impl Default for DesktopPreferences {
         Self {
             locale: Locale::detect(),
             ui_scale: UiScale::default(),
+            cursor_scale: CursorScale::default(),
+            cursor_scale_customized: None,
             controls: ControlSettings::default(),
             start_on_login: false,
             onboarding_completed: false,
@@ -84,6 +98,15 @@ impl DesktopPreferences {
     }
 
     fn normalized(mut self) -> Self {
+        match self.cursor_scale_customized {
+            Some(true) => {}
+            Some(false) => self.cursor_scale = CursorScale::default(),
+            None if self.cursor_scale.percent() == LEGACY_DEFAULT_CURSOR_SCALE => {
+                self.cursor_scale = CursorScale::default();
+            }
+            None => {}
+        }
+        self.cursor_scale = CursorScale::new(self.cursor_scale.percent());
         self.controls = self.controls.normalized();
         self
     }
@@ -98,4 +121,33 @@ fn preferences_path() -> Option<PathBuf> {
         .or_else(|| std::env::var_os("HOME").map(|home| PathBuf::from(home).join(".config")));
 
     directory.map(|path| path.join("gamepad-navigator").join("preferences.json"))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::DesktopPreferences;
+
+    #[test]
+    fn cursor_scale_defaults_to_normal_and_migrates_legacy_default() {
+        assert_eq!(DesktopPreferences::default().cursor_scale.percent(), 100);
+        let defaults = serde_json::to_value(DesktopPreferences::default()).unwrap();
+        assert!(defaults.get("cursor_scale").is_none());
+
+        let mut old_preferences = defaults;
+        old_preferences["cursor_scale"] = 135.into();
+        old_preferences
+            .as_object_mut()
+            .unwrap()
+            .remove("cursor_scale_customized");
+        let restored: DesktopPreferences = serde_json::from_value(old_preferences.clone()).unwrap();
+        let restored = restored.normalized();
+        let restored = serde_json::to_value(restored).unwrap();
+        assert!(restored.get("cursor_scale").is_none());
+
+        old_preferences["cursor_scale_customized"] = true.into();
+        let restored: DesktopPreferences = serde_json::from_value(old_preferences).unwrap();
+        let restored = restored.normalized();
+        let restored = serde_json::to_value(restored).unwrap();
+        assert_eq!(restored["cursor_scale"], 135);
+    }
 }

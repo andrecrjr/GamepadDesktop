@@ -86,6 +86,58 @@ fn stick_drift_invalid_axes_and_configured_deadzone_do_not_move_selection() {
 }
 
 #[test]
+fn default_navigation_repeats_promptly_for_stick_and_dpad() {
+    for stick in [false, true] {
+        let (mut controller, mut settings) = keyboard();
+        let mut held = GamepadFrame::default();
+        if stick {
+            held.x = 0.8;
+        } else {
+            held.buttons[Button::Right as usize] = true;
+        }
+        assert!(
+            controller
+                .update(Some(&held), TICK, &mut settings)
+                .is_empty()
+        );
+        assert_eq!(position(&controller), (3, 6));
+        for _ in 0..25 {
+            controller.update(Some(&held), TICK, &mut settings);
+        }
+        assert_eq!(
+            position(&controller),
+            (3, 6),
+            "tap must remain a single step"
+        );
+        for _ in 0..7 {
+            controller.update(Some(&held), TICK, &mut settings);
+        }
+        assert_eq!(
+            position(&controller),
+            (3, 7),
+            "held input should repeat by 320 ms"
+        );
+        for column in [8, 9] {
+            for _ in 0..10 {
+                assert!(
+                    controller
+                        .update(Some(&held), TICK, &mut settings)
+                        .is_empty()
+                );
+            }
+            assert_eq!(position(&controller), (3, column));
+        }
+        controller.update(Some(&GamepadFrame::default()), TICK, &mut settings);
+        controller.update(Some(&held), TICK, &mut settings);
+        assert_eq!(
+            position(&controller),
+            (3, 10),
+            "a fresh tap moves immediately"
+        );
+    }
+}
+
+#[test]
 fn stick_uses_the_keyboard_repeat_settings() {
     let (mut controller, mut settings) = keyboard();
     controller.keyboard.settings.repeat_delay_ms = 400;

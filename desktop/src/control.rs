@@ -5,11 +5,16 @@ use crate::keyboard::{KeyboardKey, KeyboardModifiers, KeyboardSession};
 const REPEAT_INITIAL_DELAY: f64 = 0.4;
 const DIRECTION_REPEAT_INTERVAL: f64 = 0.08;
 const SELECT_DOUBLE_TAP_WINDOW: Duration = Duration::from_millis(400);
+const NEXT_WINDOW_PRESS_GUARD: Duration = Duration::from_millis(32);
 
 pub const MOUSE_SHORTCUTS: &[(&str, &str)] = &[
     (
         "R3 · pressionar analógico direito",
-        "Abrir / fechar teclado visual próprio",
+        if cfg!(target_os = "windows") {
+            "Abrir / fechar teclado do Windows no modo Desktop"
+        } else {
+            "Abrir / fechar teclado visual próprio no modo Desktop"
+        },
     ),
     (
         "L3 · pressionar analógico esquerdo",
@@ -30,7 +35,14 @@ pub const MOUSE_SHORTCUTS: &[(&str, &str)] = &[
         "Superior · Y / △ / X no Switch",
         "Escape · fechar menu / cancelar",
     ),
-    ("Direcional", "Setas · segurar para repetir"),
+    (
+        "Direcional",
+        if cfg!(target_os = "windows") {
+            "Mover a seleção pelo teclado"
+        } else {
+            "Setas · segurar para repetir"
+        },
+    ),
     ("LB / L1", "Tab · próximo campo"),
     ("RB / R1", "Alt+Tab · alternar janela"),
     (
@@ -41,6 +53,9 @@ pub const MOUSE_SHORTCUTS: &[(&str, &str)] = &[
         "Select · dois toques rápidos",
         "Alternar entre Desktop e Jogo",
     ),
+    ("Select/Back + R3 · modo Jogo", "Abrir / fechar teclado"),
+    ("Start/Menu + LB/L1", "Print Screen · iniciar captura"),
+    ("Start/Menu + RB/R1", "F11 · tela cheia"),
 ];
 
 pub const KEYBOARD_SHORTCUTS: &[(&str, &str)] = &[
@@ -118,6 +133,7 @@ pub struct ControlSettings {
     pub mode: ControlMode,
     pub speed: f64,
     pub deadzone: f64,
+    pub magnetic_cursor: crate::magnetic_cursor::MagneticCursorSettings,
 }
 
 impl Default for ControlSettings {
@@ -127,12 +143,14 @@ impl Default for ControlSettings {
             mode: ControlMode::Desktop,
             speed: 1800.0,
             deadzone: 0.2,
+            magnetic_cursor: Default::default(),
         }
     }
 }
 
 impl ControlSettings {
     pub fn normalized(mut self) -> Self {
+        self.magnetic_cursor = self.magnetic_cursor.normalized();
         self.speed = self.speed.clamp(100.0, 2400.0);
         self.deadzone = self.deadzone.clamp(0.05, 0.5);
         self
@@ -169,6 +187,7 @@ pub enum DpadDirection {
 pub enum KeyboardInput {
     Character(char),
     Function(u8),
+    PrintScreen,
     Backspace,
     Enter,
     Escape,
@@ -203,6 +222,7 @@ pub struct MouseController {
     repeat: [f64; 4],
     system_keyboard_uses_gamepad: bool,
     select_tap_remaining: Option<Duration>,
+    next_window_press_guard: Duration,
     mode: ControlMode,
 }
 
@@ -219,12 +239,17 @@ impl Default for MouseController {
             repeat: [0.0; 4],
             system_keyboard_uses_gamepad: false,
             select_tap_remaining: None,
+            next_window_press_guard: Duration::ZERO,
             mode: ControlMode::Desktop,
         }
     }
 }
 
 impl MouseController {
+    pub(crate) fn require_neutral(&mut self) {
+        self.armed = false;
+    }
+
     pub fn set_system_keyboard_uses_gamepad(&mut self, enabled: bool) {
         self.system_keyboard_uses_gamepad = enabled;
     }
@@ -236,13 +261,9 @@ impl MouseController {
         settings: &mut ControlSettings,
     ) -> Vec<Action> {
         let mut actions = Vec::new();
+        self.next_window_press_guard = self.next_window_press_guard.saturating_sub(elapsed);
         let Some(frame) = frame else {
-            self.close_keyboard(&mut actions);
-            self.release(&mut actions);
-            self.connected = false;
-            self.armed = false;
-            self.select_tap_remaining = None;
-            self.previous = GamepadFrame::default();
+            self.disconnect(&mut actions);
             return actions;
         };
         if !self.connected {
@@ -250,12 +271,7 @@ impl MouseController {
             self.connected = true;
         }
         if self.mode != settings.mode {
-            self.mode = settings.mode;
-            self.select_tap_remaining = None;
-            self.close_keyboard(&mut actions);
-            self.release(&mut actions);
-            self.armed = false;
-            self.previous = *frame;
+            self.reset_for_mode_change(frame, settings.mode, &mut actions);
             return actions;
         }
         if let Some(remaining) = self.select_tap_remaining {
@@ -266,12 +282,20 @@ impl MouseController {
         let pause_chord = frame.pressed(Button::Start) && frame.pressed(Button::Select);
         let previous_pause_chord =
             self.previous.pressed(Button::Start) && self.previous.pressed(Button::Select);
-        let keyboard_uses_gamepad = self.keyboard.open && self.system_keyboard_uses_gamepad;
+        let keyboard_chord = settings.mode == ControlMode::Game
+            && !pause_chord
+            && frame.pressed(Button::Select)
+            && frame.pressed(Button::RightStick)
+            && !(self.previous.pressed(Button::Select)
+                && self.previous.pressed(Button::RightStick));
         if pause_chord {
             self.select_tap_remaining = None;
         }
+        if keyboard_chord {
+            self.select_tap_remaining = None;
+        }
         if settings.mode == ControlMode::Desktop
-            && !keyboard_uses_gamepad
+            && !(self.keyboard.open && self.system_keyboard_uses_gamepad)
             && pause_chord
             && !previous_pause_chord
         {
@@ -280,7 +304,7 @@ impl MouseController {
         }
         let select_pressed =
             frame.pressed(Button::Select) && !self.previous.pressed(Button::Select);
-        if !keyboard_uses_gamepad && !pause_chord && select_pressed {
+        if !self.keyboard.open && !pause_chord && !keyboard_chord && select_pressed {
             if self.select_tap_remaining.is_some() {
                 settings.mode = settings.mode.toggled();
                 self.mode = settings.mode;
@@ -293,19 +317,24 @@ impl MouseController {
             }
             self.select_tap_remaining = Some(SELECT_DOUBLE_TAP_WINDOW);
         }
-        if settings.mode == ControlMode::Game {
-            self.close_keyboard(&mut actions);
+        let keyboard_toggled =
+            frame.pressed(Button::RightStick) && !self.previous.pressed(Button::RightStick);
+        let keyboard_toggle_requested = keyboard_chord
+            || (keyboard_toggled && (settings.mode == ControlMode::Desktop || self.keyboard.open));
+        if keyboard_toggle_requested && self.keyboard.open {
+            actions.push(self.toggle_keyboard());
             self.release(&mut actions);
-            self.armed = false;
+            self.require_neutral();
             self.previous = *frame;
             return actions;
         }
-        if !settings.enabled || !self.armed {
-            if !settings.enabled {
+        let input_enabled = settings.mode == ControlMode::Game || settings.enabled;
+        if !input_enabled || !self.armed {
+            if !input_enabled {
                 self.close_keyboard(&mut actions);
             }
             self.release(&mut actions);
-            self.armed = settings.enabled
+            self.armed = input_enabled
                 && !frame.buttons.iter().any(|pressed| *pressed)
                 && [frame.x, frame.y, frame.scroll]
                     .iter()
@@ -314,20 +343,114 @@ impl MouseController {
             return actions;
         }
 
-        let keyboard_toggled =
-            frame.pressed(Button::RightStick) && !self.previous.pressed(Button::RightStick);
-        if keyboard_toggled {
+        if keyboard_toggle_requested {
             actions.push(self.toggle_keyboard());
             self.release(&mut actions);
+            if !self.keyboard.open {
+                self.require_neutral();
+            }
             self.previous = *frame;
+            return actions;
         }
-        if keyboard_uses_gamepad && !keyboard_toggled {
-            self.release_mouse(&mut actions);
-            self.update_keyboard(frame, elapsed, settings.deadzone, &mut actions);
+        if self.keyboard.open {
+            self.update_keyboard_controls(frame, elapsed, settings, &mut actions);
+            self.previous = *frame;
+            return actions;
+        }
+        if settings.mode == ControlMode::Game {
+            self.release(&mut actions);
             self.previous = *frame;
             return actions;
         }
 
+        self.update_desktop_controls(frame, elapsed, settings, &mut actions);
+        self.previous = *frame;
+        actions
+    }
+
+    fn disconnect(&mut self, actions: &mut Vec<Action>) {
+        self.close_keyboard(actions);
+        self.release(actions);
+        self.connected = false;
+        self.armed = false;
+        self.select_tap_remaining = None;
+        self.next_window_press_guard = Duration::ZERO;
+        self.previous = GamepadFrame::default();
+    }
+
+    fn reset_for_mode_change(
+        &mut self,
+        frame: &GamepadFrame,
+        mode: ControlMode,
+        actions: &mut Vec<Action>,
+    ) {
+        self.mode = mode;
+        self.select_tap_remaining = None;
+        self.next_window_press_guard = Duration::ZERO;
+        self.close_keyboard(actions);
+        self.release(actions);
+        self.armed = false;
+        self.previous = *frame;
+    }
+
+    fn update_keyboard_controls(
+        &mut self,
+        frame: &GamepadFrame,
+        elapsed: Duration,
+        settings: &ControlSettings,
+        actions: &mut Vec<Action>,
+    ) {
+        #[cfg(target_os = "linux")]
+        if self.keyboard.presentation == crate::keyboard::KeyboardPresentation::System {
+            // COSMIC reads the physical controller itself. Never inject duplicate input.
+            self.release(actions);
+            if frame.pressed(Button::East) && !self.previous.pressed(Button::East) {
+                self.close_keyboard(actions);
+                self.require_neutral();
+            }
+            return;
+        }
+        if self.system_keyboard_uses_gamepad {
+            self.release_mouse(actions);
+            self.update_keyboard(frame, elapsed, settings.deadzone, actions);
+            return;
+        }
+
+        self.move_pointer(frame, elapsed, settings, actions);
+        for (index, (button, direction)) in [
+            (Button::Up, DpadDirection::Up),
+            (Button::Down, DpadDirection::Down),
+            (Button::Left, DpadDirection::Left),
+            (Button::Right, DpadDirection::Right),
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            if self.repeat_direction(
+                frame.pressed(button),
+                self.previous.pressed(button),
+                index,
+                elapsed,
+                REPEAT_INITIAL_DELAY,
+                DIRECTION_REPEAT_INTERVAL,
+            ) {
+                actions.push(Action::Dpad(direction));
+            }
+        }
+        let pressed = frame.pressed(Button::South);
+        if pressed != self.held[0] {
+            actions.push(Action::Mouse(MouseButton::Left, pressed));
+            self.held[0] = pressed;
+        }
+    }
+
+    fn update_desktop_controls(
+        &mut self,
+        frame: &GamepadFrame,
+        elapsed: Duration,
+        settings: &ControlSettings,
+        actions: &mut Vec<Action>,
+    ) {
         for (index, (button, mouse)) in [
             (Button::South, MouseButton::Left),
             (Button::East, MouseButton::Right),
@@ -336,9 +459,21 @@ impl MouseController {
         .enumerate()
         {
             let pressed = frame.pressed(button);
-            if !keyboard_toggled && pressed != self.held[index] {
+            if pressed != self.held[index] {
                 actions.push(Action::Mouse(mouse, pressed));
                 self.held[index] = pressed;
+            }
+        }
+        let start_held = frame.pressed(Button::Start);
+        let left_shoulder_pressed =
+            frame.pressed(Button::LeftShoulder) && !self.previous.pressed(Button::LeftShoulder);
+        let right_shoulder_pressed =
+            frame.pressed(Button::RightShoulder) && !self.previous.pressed(Button::RightShoulder);
+        if start_held {
+            match (left_shoulder_pressed, right_shoulder_pressed) {
+                (true, false) => actions.push(Action::Keyboard(KeyboardInput::PrintScreen)),
+                (false, true) => actions.push(Action::Keyboard(KeyboardInput::Function(11))),
+                _ => {}
             }
         }
         for (button, action) in [
@@ -348,7 +483,15 @@ impl MouseController {
             (Button::LeftShoulder, Action::Key(SystemKey::Tab)),
             (Button::RightShoulder, Action::NextWindow),
         ] {
-            if !keyboard_toggled && frame.pressed(button) && !self.previous.pressed(button) {
+            let shoulder_chord =
+                start_held && matches!(button, Button::LeftShoulder | Button::RightShoulder);
+            if !shoulder_chord && frame.pressed(button) && !self.previous.pressed(button) {
+                if action == Action::NextWindow {
+                    if !self.next_window_press_guard.is_zero() {
+                        continue;
+                    }
+                    self.next_window_press_guard = NEXT_WINDOW_PRESS_GUARD;
+                }
                 actions.push(action);
             }
         }
@@ -362,16 +505,14 @@ impl MouseController {
         .into_iter()
         .enumerate()
         {
-            if !keyboard_toggled
-                && self.repeat_direction(
-                    frame.pressed(button),
-                    self.previous.pressed(button),
-                    index,
-                    elapsed,
-                    REPEAT_INITIAL_DELAY,
-                    DIRECTION_REPEAT_INTERVAL,
-                )
-            {
+            if self.repeat_direction(
+                frame.pressed(button),
+                self.previous.pressed(button),
+                index,
+                elapsed,
+                REPEAT_INITIAL_DELAY,
+                DIRECTION_REPEAT_INTERVAL,
+            ) {
                 actions.push(Action::Dpad(direction));
                 self.dpad_routing_held = true;
             }
@@ -384,15 +525,7 @@ impl MouseController {
             actions.push(Action::DpadReleased);
             self.dpad_routing_held = false;
         }
-        let x = axis_value(frame.x, settings.deadzone);
-        let y = axis_value(frame.y, settings.deadzone);
-        let magnitude = x.hypot(y).max(1.0);
-        let speed = settings.speed.clamp(100.0, 2400.0);
-        let dx = accumulate(&mut self.remainder[0], x / magnitude * speed * seconds);
-        let dy = accumulate(&mut self.remainder[1], y / magnitude * speed * seconds);
-        if dx != 0 || dy != 0 {
-            actions.push(Action::Move(dx, dy));
-        }
+        self.move_pointer(frame, elapsed, settings, actions);
         let scroll = accumulate(
             &mut self.remainder[2],
             axis_value(frame.scroll, settings.deadzone) * 10.0 * seconds,
@@ -400,8 +533,27 @@ impl MouseController {
         if scroll != 0 {
             actions.push(Action::Scroll(scroll));
         }
-        self.previous = *frame;
-        actions
+    }
+
+    fn move_pointer(
+        &mut self,
+        frame: &GamepadFrame,
+        elapsed: Duration,
+        settings: &ControlSettings,
+        actions: &mut Vec<Action>,
+    ) {
+        let seconds = elapsed.as_secs_f64().min(0.05);
+        let x = axis_value(frame.x, settings.deadzone);
+        let y = axis_value(frame.y, settings.deadzone);
+        let deflection = x.hypot(y);
+        let magnitude = deflection.max(1.0);
+        // Add precision near neutral while preserving full-deflection speed.
+        let speed = settings.speed.clamp(100.0, 2400.0) * deflection.min(1.0).sqrt();
+        let dx = accumulate(&mut self.remainder[0], x / magnitude * speed * seconds);
+        let dy = accumulate(&mut self.remainder[1], y / magnitude * speed * seconds);
+        if dx != 0 || dy != 0 {
+            actions.push(Action::Move(dx, dy));
+        }
     }
 
     fn release(&mut self, actions: &mut Vec<Action>) {
@@ -606,4 +758,36 @@ fn accumulate(remainder: &mut f64, amount: f64) -> i32 {
     let whole = remainder.trunc() as i32;
     *remainder -= f64::from(whole);
     whole
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{Action, Button, ControlSettings, GamepadFrame, MouseController};
+    use std::time::Duration;
+
+    #[test]
+    fn r3_closes_an_open_keyboard_even_when_the_controller_requires_neutral() {
+        let tick = Duration::from_millis(10);
+        let mut controller = MouseController::default();
+        let mut settings = ControlSettings::default();
+        let neutral = GamepadFrame::default();
+        controller.set_system_keyboard_uses_gamepad(true);
+        controller.keyboard.presentation = crate::keyboard::KeyboardPresentation::System;
+        controller.update(Some(&neutral), tick, &mut settings);
+
+        let mut r3 = neutral;
+        r3.buttons[Button::RightStick as usize] = true;
+        assert_eq!(
+            controller.update(Some(&r3), tick, &mut settings),
+            vec![Action::OnScreenKeyboard(true)]
+        );
+        controller.update(Some(&neutral), tick, &mut settings);
+        controller.require_neutral();
+
+        assert_eq!(
+            controller.update(Some(&r3), tick, &mut settings),
+            vec![Action::OnScreenKeyboard(false)]
+        );
+        assert!(!controller.keyboard.open);
+    }
 }

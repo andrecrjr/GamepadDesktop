@@ -1,8 +1,10 @@
 pub mod control;
+pub mod cursor_scale;
 pub mod focused_input;
 pub mod gamepads;
 pub mod i18n;
 pub mod keyboard;
+pub mod magnetic_cursor;
 pub(crate) mod notifications;
 pub mod onboarding;
 pub mod placement;
@@ -10,9 +12,17 @@ pub mod preferences;
 pub mod runtime;
 pub(crate) mod startup;
 pub mod tray;
+pub mod updater;
+mod window_switcher;
 
 #[cfg(any(target_os = "windows", test))]
 mod windows_navigation;
+
+#[cfg(target_os = "windows")]
+mod windows_gamepad_hook;
+
+#[cfg(target_os = "windows")]
+mod windows_touch_keyboard;
 
 #[cfg(target_os = "linux")]
 #[path = "linux.rs"]

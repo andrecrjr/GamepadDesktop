@@ -1,0 +1,10 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=Gamepad Desktop
+Comment=Use a gamepad to navigate and type on your desktop
+Exec=gamepad-desktop
+Icon=gamepad-desktop
+Terminal=false
+Categories=Utility;Accessibility;
+StartupNotify=true

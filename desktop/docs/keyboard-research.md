@@ -1,6 +1,6 @@
 # Teclado QWERTY para gamepad
 
-> Esta nota técnica complementa o [guia do sistema](system-overview.md).
+> Registro histórico da pesquisa e das correções do teclado próprio. A implementação atual usa o teclado nativo no Windows e no COSMIC quando disponível; consulte o [guia de uso](../README.md#on-screen-keyboard) e a [visão do sistema](system-overview.md) para o comportamento atual.
 
 Pesquisa de 19/10/2026. Requisito: teclado próprio, QWERTY fiel, operável pelo gamepad, com experiência equivalente em Linux e Windows.
 

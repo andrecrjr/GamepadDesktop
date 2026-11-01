@@ -4,7 +4,7 @@ use std::time::Duration;
 use crate::{
     control::{
         Action, Button, ControlMode, ControlSettings, GamepadFrame, KeyboardInput, MouseButton,
-        MouseController,
+        MouseController, SystemKey,
     },
     keyboard::KeyboardSession,
 };
@@ -24,12 +24,14 @@ pub enum Step {
     CloseKeyboard,
     Game,
     Desktop,
+    WindowSwitcher,
+    DesktopShortcuts,
     Pause,
     Ready,
 }
 
 impl Step {
-    pub const ALL: [Self; 14] = [
+    pub const ALL: [Self; 16] = [
         Self::Welcome,
         Self::Modes,
         Self::Pointer,
@@ -42,26 +44,25 @@ impl Step {
         Self::CloseKeyboard,
         Self::Game,
         Self::Desktop,
+        Self::WindowSwitcher,
+        Self::DesktopShortcuts,
         Self::Pause,
         Self::Ready,
     ];
 
     pub fn chapter(self) -> (usize, usize, usize) {
         match self {
-            Self::Welcome => (0, 1, 1),
-            Self::Modes => (1, 1, 1),
-            Self::Pointer => (2, 1, 5),
-            Self::Click => (2, 2, 5),
-            Self::RightClick => (2, 3, 5),
-            Self::Drag => (2, 4, 5),
-            Self::Scroll => (2, 5, 5),
-            Self::OpenKeyboard => (3, 1, 3),
-            Self::Type => (3, 2, 3),
-            Self::CloseKeyboard => (3, 3, 3),
-            Self::Game => (4, 1, 3),
-            Self::Desktop => (4, 2, 3),
-            Self::Pause => (4, 3, 3),
-            Self::Ready => (5, 1, 1),
+            Self::Welcome => (0, 0, 2),
+            Self::Pointer => (0, 1, 2),
+            Self::Click => (0, 2, 2),
+            Self::Scroll => (1, 1, 1),
+            Self::OpenKeyboard => (2, 1, 3),
+            Self::Type => (2, 2, 3),
+            Self::CloseKeyboard => (2, 3, 3),
+            Self::Modes | Self::Game => (3, 1, 2),
+            Self::Desktop => (3, 2, 2),
+            Self::Ready => (4, 1, 1),
+            _ => (0, 1, 1),
         }
     }
 
@@ -75,6 +76,7 @@ pub enum Command {
     Next,
     Back,
     ToggleDemo,
+    LearnMore,
     Skip,
     Finish(ControlMode),
     Language(crate::i18n::Locale),
@@ -84,6 +86,7 @@ pub enum Command {
 #[derive(Clone)]
 pub struct Onboarding {
     pub step: Step,
+    pub extra_lessons: bool,
     pub complete: bool,
     pub demonstrating: bool,
     pub cursor: [f32; 2],
@@ -98,12 +101,18 @@ pub struct Onboarding {
     moved_selection: bool,
     paused_once: bool,
     demo_time: f64,
+    pub(crate) window_switcher_open: bool,
+    pub(crate) selected_window: usize,
+    pub(crate) preview_shortcut: Option<KeyboardInput>,
+    print_screen_practiced: bool,
+    fullscreen_practiced: bool,
 }
 
 impl Default for Onboarding {
     fn default() -> Self {
         let mut tour = Self {
             step: Step::Welcome,
+            extra_lessons: false,
             complete: false,
             demonstrating: false,
             cursor: [0.3, 0.5],
@@ -118,6 +127,11 @@ impl Default for Onboarding {
             moved_selection: false,
             paused_once: false,
             demo_time: 0.0,
+            window_switcher_open: false,
+            selected_window: 0,
+            preview_shortcut: None,
+            print_screen_practiced: false,
+            fullscreen_practiced: false,
         };
         tour.reset_lesson();
         tour
@@ -125,14 +139,75 @@ impl Default for Onboarding {
 }
 
 impl Onboarding {
+    const PRIMARY: &[Step] = &[
+        Step::Welcome,
+        Step::Pointer,
+        Step::Click,
+        Step::Scroll,
+        Step::OpenKeyboard,
+        Step::Type,
+        Step::CloseKeyboard,
+        Step::Game,
+        Step::Desktop,
+        Step::Ready,
+    ];
+    const EXTRA: &[Step] = &[
+        Step::RightClick,
+        Step::Drag,
+        Step::WindowSwitcher,
+        Step::DesktopShortcuts,
+        Step::Pause,
+        Step::Ready,
+    ];
+
+    pub fn lesson(step: Step) -> Self {
+        let mut tour = Self {
+            step,
+            extra_lessons: Self::EXTRA.contains(&step) && step != Step::Ready,
+            ..Self::default()
+        };
+        tour.reset_lesson();
+        tour
+    }
+
+    fn route(&self) -> &'static [Step] {
+        if self.extra_lessons {
+            Self::EXTRA
+        } else {
+            Self::PRIMARY
+        }
+    }
+
     pub fn next(&mut self) {
-        self.step = Step::ALL[(self.step as usize + 1).min(Step::ALL.len() - 1)];
+        let route = self.route();
+        let index = route
+            .iter()
+            .position(|step| *step == self.step)
+            .unwrap_or(0);
+        self.step = route[(index + 1).min(route.len() - 1)];
         self.reset_lesson();
     }
 
     pub fn back(&mut self) {
-        self.step = Step::ALL[(self.step as usize).saturating_sub(1)];
+        let route = self.route();
+        let index = route
+            .iter()
+            .position(|step| *step == self.step)
+            .unwrap_or(0);
+        self.step = route[index.saturating_sub(1)];
         self.reset_lesson();
+    }
+
+    pub fn progress(&self) -> (usize, usize) {
+        if self.extra_lessons {
+            let index = Self::EXTRA
+                .iter()
+                .position(|step| *step == self.step)
+                .unwrap_or(0);
+            (index.min(4), 5)
+        } else {
+            (self.step.chapter().0, 5)
+        }
     }
 
     pub fn toggle_demo(&mut self) {
@@ -146,6 +221,14 @@ impl Onboarding {
     }
     pub fn practice_settings(&self) -> ControlSettings {
         self.settings
+    }
+
+    pub fn window_switcher_preview(&self) -> Option<usize> {
+        self.window_switcher_open.then_some(self.selected_window)
+    }
+
+    pub fn shortcut_preview(&self) -> Option<KeyboardInput> {
+        self.preview_shortcut
     }
 
     fn reset_lesson(&mut self) {
@@ -179,6 +262,11 @@ impl Onboarding {
         self.moved_selection = false;
         self.paused_once = false;
         self.demo_time = 0.0;
+        self.window_switcher_open = false;
+        self.selected_window = 0;
+        self.preview_shortcut = None;
+        self.print_screen_practiced = false;
+        self.fullscreen_practiced = false;
     }
 
     pub fn update(
@@ -200,8 +288,12 @@ impl Onboarding {
             self.previous
                 .is_some_and(|previous| frame.pressed(button) && !previous.pressed(button))
         };
-        let back = edge(Button::LeftShoulder);
-        let next = edge(Button::RightShoulder);
+        let trying_desktop_shortcut =
+            self.step == Step::DesktopShortcuts && frame.pressed(Button::Start);
+        let back = edge(Button::LeftShoulder) && !trying_desktop_shortcut;
+        let next = edge(Button::RightShoulder)
+            && self.step != Step::WindowSwitcher
+            && !trying_desktop_shortcut;
         let confirm = edge(Button::South);
         if self.step == Step::Ready {
             if edge(Button::Left) {
@@ -219,7 +311,13 @@ impl Onboarding {
         if self.step == Step::Ready {
             return confirm.then_some(self.start_mode);
         }
-        if next || confirm && matches!(self.step, Step::Welcome | Step::Modes) {
+        if next
+            || confirm
+                && matches!(
+                    self.step,
+                    Step::Welcome | Step::Modes | Step::WindowSwitcher
+                )
+        {
             self.next();
         } else if !self.demonstrating && self.step.is_practice() {
             self.practice(frame, elapsed);
@@ -264,6 +362,16 @@ impl Onboarding {
                 Step::Game | Step::Desktop => {
                     frame.buttons[Button::Select as usize] =
                         (0.4..0.48).contains(&time) || (0.65..0.73).contains(&time)
+                }
+                Step::WindowSwitcher => {
+                    frame.buttons[Button::RightShoulder as usize] =
+                        (0.4..0.55).contains(&time) || (0.85..1.0).contains(&time);
+                    frame.buttons[Button::West as usize] = (1.35..1.5).contains(&time);
+                }
+                Step::DesktopShortcuts => {
+                    frame.buttons[Button::Start as usize] = true;
+                    frame.buttons[Button::LeftShoulder as usize] = (0.4..0.55).contains(&time);
+                    frame.buttons[Button::RightShoulder as usize] = (1.1..1.25).contains(&time);
                 }
                 Step::Pause => {
                     let pressed = (0.4..0.6).contains(&time) || (1.0..1.2).contains(&time);
@@ -335,6 +443,27 @@ impl Onboarding {
                         (self.step, open),
                         (Step::OpenKeyboard, true) | (Step::CloseKeyboard, false)
                     );
+                }
+                Action::NextWindow if self.step == Step::WindowSwitcher => {
+                    self.window_switcher_open = true;
+                    self.selected_window = (self.selected_window + 1) % 3;
+                }
+                Action::Key(SystemKey::Enter | SystemKey::Escape)
+                    if self.step == Step::WindowSwitcher && self.window_switcher_open =>
+                {
+                    self.window_switcher_open = false;
+                    self.complete = true;
+                }
+                Action::Keyboard(
+                    input @ (KeyboardInput::PrintScreen | KeyboardInput::Function(11)),
+                ) if self.step == Step::DesktopShortcuts => {
+                    self.preview_shortcut = Some(input);
+                    match input {
+                        KeyboardInput::PrintScreen => self.print_screen_practiced = true,
+                        KeyboardInput::Function(11) => self.fullscreen_practiced = true,
+                        _ => {}
+                    }
+                    self.complete = self.print_screen_practiced && self.fullscreen_practiced;
                 }
                 Action::Keyboard(KeyboardInput::Character(character))
                     if self.step == Step::Type =>

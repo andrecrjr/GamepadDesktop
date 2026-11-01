@@ -1,6 +1,25 @@
 use super::*;
-use crate::control::{Button, MouseButton};
+use crate::control::{Button, KeyboardInput, MouseButton};
 use crate::onboarding::Step;
+
+fn update_buttons(
+    state: &mut RuntimeState,
+    controller: &mut MouseController,
+    buttons: &[Button],
+) -> Vec<Action> {
+    let mut frame = GamepadFrame::default();
+    for button in buttons {
+        frame.buttons[*button as usize] = true;
+    }
+    update_control(state, controller, Some(&frame), Duration::from_millis(16))
+}
+
+fn assert_actions_stay_local(actions: &[Action]) {
+    assert!(actions.iter().all(|action| matches!(
+        action,
+        Action::Mouse(_, false) | Action::OnScreenKeyboard(false) | Action::DpadReleased
+    )));
+}
 
 #[test]
 fn tutorial_keeps_the_native_pointer_visible_even_in_game_mode() {
@@ -47,14 +66,59 @@ fn practice_never_sends_movement_keyboard_or_mode_changes_to_the_desktop() {
         Some(&frame),
         Duration::from_millis(32),
     );
-    assert!(
-        actions.iter().all(|action| matches!(
-            action,
-            Action::Mouse(_, false) | Action::OnScreenKeyboard(false) | Action::DpadReleased
-        )),
-        "unexpected desktop actions: {actions:?}"
-    );
+    assert_actions_stay_local(&actions);
     assert!(!state.keyboard.open);
+    assert_eq!(state.settings.mode, ControlMode::Desktop);
+}
+
+#[test]
+fn window_and_desktop_shortcut_lessons_only_change_the_local_preview() {
+    let mut state = RuntimeState::default();
+    let mut controller = MouseController::default();
+    update_buttons(&mut state, &mut controller, &[]);
+
+    let tour = Onboarding::lesson(Step::WindowSwitcher);
+    state.onboarding = Some(tour);
+
+    for expected in [1, 2] {
+        update_buttons(&mut state, &mut controller, &[]);
+        let actions = update_buttons(&mut state, &mut controller, &[Button::RightShoulder]);
+        assert_actions_stay_local(&actions);
+        let tour = state.onboarding.as_ref().unwrap();
+        assert_eq!(tour.step, Step::WindowSwitcher);
+        assert!(tour.window_switcher_open);
+        assert_eq!(tour.selected_window, expected);
+        assert!(!tour.complete, "moving the preview is not the final action");
+    }
+
+    update_buttons(&mut state, &mut controller, &[]);
+    let actions = update_buttons(&mut state, &mut controller, &[Button::West]);
+    assert_actions_stay_local(&actions);
+    assert!(!state.onboarding.as_ref().unwrap().window_switcher_open);
+    assert!(state.onboarding.as_ref().unwrap().complete);
+
+    update_buttons(&mut state, &mut controller, &[]);
+    update_buttons(&mut state, &mut controller, &[Button::South]);
+    assert_eq!(
+        state.onboarding.as_ref().unwrap().step,
+        Step::DesktopShortcuts
+    );
+
+    for (index, (shoulder, expected)) in [
+        (Button::LeftShoulder, KeyboardInput::PrintScreen),
+        (Button::RightShoulder, KeyboardInput::Function(11)),
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        update_buttons(&mut state, &mut controller, &[]);
+        let actions = update_buttons(&mut state, &mut controller, &[Button::Start, shoulder]);
+        assert_actions_stay_local(&actions);
+        let tour = state.onboarding.as_ref().unwrap();
+        assert_eq!(tour.step, Step::DesktopShortcuts);
+        assert_eq!(tour.preview_shortcut, Some(expected));
+        assert_eq!(tour.complete, index == 1);
+    }
     assert_eq!(state.settings.mode, ControlMode::Desktop);
 }
 
@@ -91,10 +155,7 @@ fn reopening_the_tour_releases_a_drag_and_requires_neutral_before_resuming() {
 #[test]
 fn switching_modes_in_a_lesson_preserves_the_real_mode_and_pause_setting() {
     let mut state = RuntimeState::default();
-    let mut tour = Onboarding::default();
-    while tour.step != Step::Game {
-        tour.next();
-    }
+    let tour = Onboarding::lesson(Step::Game);
     state.onboarding = Some(tour);
     let settings = state.settings;
     let mut controller = MouseController::default();

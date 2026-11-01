@@ -21,8 +21,8 @@
 - `make web-build` creates a production extension build; `make web-package` creates its ZIP.
 - `make web-test` builds the WXT `e2e` mode and runs Playwright against Chromium; run `npx playwright install chromium` from `extension/` once to install its browser.
 - `make desktop-run`, `make desktop-check`, `make desktop-lint`, `make desktop-format`, and `make desktop-test` run the Rust app workflows.
-- `make desktop-build` creates Linux and Windows x64 release packages in `desktop/dist`; install the Windows Rust target, MinGW, CMake, and `zip` first.
-- `make desktop-linux-package` and `make desktop-windows` build each platform package separately.
+- `make desktop-build` creates the Linux x64 archive and Windows x64 executable in `desktop/dist`; install the Windows Rust target, MinGW, and CMake first.
+- `make desktop-linux-package` creates the Linux archive; `make desktop-windows` builds the Windows executable.
 
 ## Coding Style and Naming Conventions
 

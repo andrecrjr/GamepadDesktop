@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://gamepaddesktop.ac-jr.com/sitemap.xml

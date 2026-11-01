@@ -4,10 +4,19 @@ use evdev::{
 };
 use std::env;
 
-use crate::control::{Action, DpadDirection, KeyboardInput, MouseButton, SystemKey};
+#[path = "cosmic_keyboard.rs"]
+mod cosmic_keyboard;
+use cosmic_keyboard::CosmicKeyboard;
+#[path = "linux_cursor_scale.rs"]
+mod linux_cursor_scale;
+use linux_cursor_scale::LinuxCursorScale;
+
 use crate::{
+    control::{Action, DpadDirection, KeyboardInput, MouseButton, SystemKey},
+    cursor_scale::{CursorScale, CursorScaleRange},
     keyboard::{KeyboardModifiers, KeyboardPresentation, KeyboardSession},
     wayland_keyboard::WaylandKeyboardOverlay,
+    window_switcher::{WindowSwitcherState, WindowSwitcherStep},
 };
 
 #[cfg(test)]
@@ -18,8 +27,11 @@ pub struct Platform {
     pointer: VirtualDevice,
     keyboard: VirtualDevice,
     keyboard_overlay: Option<WaylandKeyboardOverlay>,
+    cosmic_keyboard: Option<CosmicKeyboard>,
     keyboard_presentation: KeyboardPresentation,
     keyboard_overlay_error: Option<String>,
+    cursor_scale: LinuxCursorScale,
+    window_switcher: WindowSwitcherState,
 }
 
 impl Platform {
@@ -55,12 +67,24 @@ impl Platform {
             } else {
                 (None, KeyboardPresentation::Viewport, None)
             };
+            let cosmic_keyboard = CosmicKeyboard::connect(
+                is_wayland,
+                &env::var("XDG_CURRENT_DESKTOP").unwrap_or_default(),
+            );
+            let keyboard_presentation = if cosmic_keyboard.is_some() {
+                KeyboardPresentation::System
+            } else {
+                keyboard_presentation
+            };
             Ok(Self {
                 pointer,
                 keyboard,
                 keyboard_overlay,
+                cosmic_keyboard,
                 keyboard_presentation,
                 keyboard_overlay_error,
+                cursor_scale: LinuxCursorScale::new(),
+                window_switcher: WindowSwitcherState::default(),
             })
         };
         create().map_err(|error| format!("Não foi possível criar mouse/teclado virtual em /dev/uinput: {error}. Verifique as permissões da sua sessão."))
@@ -80,11 +104,48 @@ impl Platform {
 
     pub(crate) fn update_native_dpad_target(&mut self) {}
 
-    pub(crate) fn update_mouse_mode(&mut self, _: bool, _: bool) -> Result<(), String> {
+    pub fn cursor_scale_range(&self) -> CursorScaleRange {
+        self.cursor_scale.range()
+    }
+
+    pub fn set_cursor_scale(&mut self, scale: CursorScale) -> Result<(), String> {
+        self.cursor_scale.set(scale).map(|_| ())
+    }
+
+    pub(crate) fn update_mouse_mode(
+        &mut self,
+        enabled: bool,
+        connected: bool,
+    ) -> Result<(), String> {
+        if !enabled || !connected {
+            self.finish_window_switcher(true)?;
+        }
         Ok(())
     }
 
-    pub fn update_keyboard_overlay(&mut self, session: &KeyboardSession) -> Result<(), String> {
+    pub fn update_keyboard_overlay(&mut self, session: &mut KeyboardSession) -> Result<(), String> {
+        if let Some(keyboard) = &mut self.cosmic_keyboard {
+            match keyboard.update(session.open) {
+                Ok(()) => return Ok(()),
+                Err(error) => {
+                    // Release native ownership before restoring the existing Linux path.
+                    let _ = keyboard.update(false);
+                    self.cosmic_keyboard = None;
+                    self.keyboard_presentation = if self.keyboard_overlay.is_some() {
+                        KeyboardPresentation::WaylandLayer
+                    } else {
+                        KeyboardPresentation::Unavailable
+                    };
+                    session.presentation = self.keyboard_presentation;
+                    session.status = Some(format!(
+                        "COSMIC indisponível; usando teclado próprio: {error}"
+                    ));
+                    if self.keyboard_overlay.is_none() {
+                        return Err(error);
+                    }
+                }
+            }
+        }
         let Some(overlay) = &mut self.keyboard_overlay else {
             return Ok(());
         };
@@ -98,6 +159,19 @@ impl Platform {
     }
 
     pub fn apply(&mut self, action: Action) -> Result<(), String> {
+        if self.window_switcher.is_open() {
+            match action {
+                Action::Key(SystemKey::Enter) => {
+                    self.finish_window_switcher(false)?;
+                    return Ok(());
+                }
+                Action::Key(SystemKey::Escape) => {
+                    self.finish_window_switcher(true)?;
+                    return Ok(());
+                }
+                _ => {}
+            }
+        }
         let key_event = |key: KeyCode, value| InputEvent::new(EventType::KEY.0, key.0, value);
         let result = match action {
             Action::OnScreenKeyboard(_) => return Ok(()),
@@ -145,18 +219,44 @@ impl Platform {
             }
             Action::KeyboardChord(input, modifiers) => self.emit_keyboard_input(input, modifiers),
             Action::NextWindow => {
-                let press = self.keyboard.emit(&[
-                    key_event(KeyCode::KEY_LEFTALT, 1),
-                    key_event(KeyCode::KEY_TAB, 1),
-                ]);
-                let release = self.keyboard.emit(&[
-                    key_event(KeyCode::KEY_TAB, 0),
-                    key_event(KeyCode::KEY_LEFTALT, 0),
-                ]);
-                press.and(release)
+                let step = self.window_switcher.next();
+                let modifier = if step == WindowSwitcherStep::Open {
+                    let result = self.keyboard.emit(&[key_event(KeyCode::KEY_LEFTALT, 1)]);
+                    if result.is_err() {
+                        self.window_switcher.finish();
+                    }
+                    result
+                } else {
+                    Ok(())
+                };
+                if modifier.is_ok() {
+                    self.emit_key(KeyCode::KEY_TAB)
+                } else {
+                    modifier
+                }
             }
         };
         result.map_err(|error| format!("Erro enviando entrada ao desktop: {error}"))
+    }
+
+    fn finish_window_switcher(&mut self, cancel: bool) -> Result<(), String> {
+        if !self.window_switcher.is_open() {
+            return Ok(());
+        }
+        let cancel_result = if cancel {
+            self.emit_key(KeyCode::KEY_ESC)
+        } else {
+            Ok(())
+        };
+        let release =
+            self.keyboard
+                .emit(&[InputEvent::new(EventType::KEY.0, KeyCode::KEY_LEFTALT.0, 0)]);
+        if release.is_ok() {
+            self.window_switcher.finish();
+        }
+        cancel_result
+            .and(release)
+            .map_err(|error| error.to_string())
     }
 
     fn emit_key(&mut self, key: KeyCode) -> std::io::Result<()> {
@@ -192,6 +292,7 @@ impl Platform {
                 },
                 false,
             ),
+            KeyboardInput::PrintScreen => (KeyCode::KEY_SYSRQ, false),
             KeyboardInput::Backspace => (KeyCode::KEY_BACKSPACE, false),
             KeyboardInput::Enter => (KeyCode::KEY_ENTER, false),
             KeyboardInput::Escape => (KeyCode::KEY_ESC, false),
@@ -219,6 +320,12 @@ impl Platform {
             .chain(modifiers.iter().rev().copied().map(release))
             .collect();
         self.keyboard.emit(&events)
+    }
+}
+
+impl Drop for Platform {
+    fn drop(&mut self) {
+        let _ = self.finish_window_switcher(true);
     }
 }
 

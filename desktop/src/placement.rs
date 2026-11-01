@@ -24,6 +24,22 @@ impl Rect {
             && other.y + other.height / 2 >= self.y
             && other.y + other.height / 2 < self.y + self.height
     }
+
+    pub fn intersection(self, other: Self) -> Option<Self> {
+        if !self.valid() || !other.valid() {
+            return None;
+        }
+        let x = self.x.max(other.x);
+        let y = self.y.max(other.y);
+        let right = (self.x + self.width).min(other.x + other.width);
+        let bottom = (self.y + self.height).min(other.y + other.height);
+        (right > x && bottom > y).then_some(Self {
+            x,
+            y,
+            width: right - x,
+            height: bottom - y,
+        })
+    }
 }
 
 pub fn keyboard_rect(screen: Rect, input: Option<Rect>, size: (u32, u32), top: bool) -> Rect {
@@ -43,7 +59,7 @@ pub fn keyboard_rect(screen: Rect, input: Option<Rect>, size: (u32, u32), top: b
         width,
         height,
     };
-    if let Some(input) = input.filter(|r| screen.contains_center(*r)) {
+    if let Some(input) = input.and_then(|input| screen.intersection(input)) {
         result.x = (input.x + (input.width - width) / 2).clamp(left, right.max(left));
         result.y = (input.y - height - 12).clamp(upper, lower.max(upper));
         if input.y - height - 12 >= upper {
@@ -64,6 +80,8 @@ pub fn keyboard_rect(screen: Rect, input: Option<Rect>, size: (u32, u32), top: b
             };
         }
     }
+    result.x = result.x.clamp(left, right.max(left));
+    result.y = result.y.clamp(upper, lower.max(upper));
     result
 }
 
@@ -154,5 +172,67 @@ mod tests {
         let result = keyboard_rect(screen, None, (640, 229), false);
         assert!(result.x >= 0 && result.y >= 0);
         assert!(result.width <= 500 && result.height <= 200);
+    }
+
+    #[test]
+    fn follows_the_visible_part_of_an_input_whose_center_is_off_screen() {
+        let input = Rect {
+            x: -500,
+            y: 200,
+            width: 600,
+            height: 40,
+        };
+        let result = keyboard_rect(SCREEN, Some(input), (640, 229), false);
+        assert_eq!(result.x, 20);
+        assert_eq!(result.y, input.y + input.height + 12);
+    }
+
+    #[test]
+    fn keeps_the_keyboard_and_its_margin_inside_each_screen_edge() {
+        for screen in [
+            SCREEN,
+            Rect {
+                x: -1920,
+                y: -1080,
+                ..SCREEN
+            },
+            Rect {
+                width: 500,
+                height: 200,
+                ..SCREEN
+            },
+        ] {
+            for x in [
+                screen.x,
+                screen.x + screen.width / 2,
+                screen.x + screen.width - 1,
+            ] {
+                for y in [
+                    screen.y,
+                    screen.y + screen.height / 2,
+                    screen.y + screen.height - 1,
+                ] {
+                    let input = Rect {
+                        x,
+                        y,
+                        width: 1,
+                        height: 1,
+                    };
+                    let result = keyboard_rect(screen, Some(input), (640, 229), false);
+                    assert!(
+                        result.x >= screen.x + 20 && result.y >= screen.y + 20,
+                        "{screen:?}: {result:?}"
+                    );
+                    assert!(
+                        result.x + result.width <= screen.x + screen.width - 20,
+                        "{screen:?}: {result:?}"
+                    );
+                    assert!(
+                        result.y + result.height <= screen.y + screen.height - 20,
+                        "{screen:?}: {result:?}"
+                    );
+                }
+            }
+        }
     }
 }

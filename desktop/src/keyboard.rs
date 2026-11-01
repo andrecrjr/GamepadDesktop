@@ -3,6 +3,7 @@ pub enum KeyboardPresentation {
     #[default]
     Viewport,
     WaylandLayer,
+    System,
     Unavailable,
 }
 
@@ -158,8 +159,8 @@ impl Default for KeyboardSettings {
             opacity: 235,
             position: KeyboardPosition::Bottom,
             repeat_enabled: true,
-            repeat_delay_ms: 600,
-            repeat_interval_ms: 400,
+            repeat_delay_ms: 300,
+            repeat_interval_ms: 100,
         }
     }
 }
@@ -168,8 +169,8 @@ impl KeyboardSettings {
     pub fn normalized(mut self) -> Self {
         self.width = self.width.clamp(520, 1000);
         self.opacity = self.opacity.max(160);
-        self.repeat_delay_ms = self.repeat_delay_ms.clamp(400, 1200);
-        self.repeat_interval_ms = self.repeat_interval_ms.clamp(150, 1000);
+        self.repeat_delay_ms = self.repeat_delay_ms.clamp(200, 1200);
+        self.repeat_interval_ms = self.repeat_interval_ms.clamp(100, 1000);
         self
     }
 

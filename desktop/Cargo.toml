@@ -1,13 +1,38 @@
 [package]
 name = "gamepad-desktop"
-version = "0.1.0"
+version = "0.5.0"
 edition = "2024"
+description = "Control the desktop and type with a gamepad"
+license = "MIT"
+repository = "https://github.com/andrecrjr/GamepadDesktop"
+readme = "README.md"
+
+[package.metadata.deb]
+name = "gamepad-desktop"
+maintainer = "Gamepad Desktop Maintainers <andrecrjr@users.noreply.github.com>"
+depends = "$auto"
+section = "utils"
+priority = "optional"
+assets = [
+  "$auto",
+  [
+    "packaging/gamepad-desktop.desktop",
+    "usr/share/applications/gamepad-desktop.desktop",
+    "644",
+  ],
+  [
+    "assets/gamepad-desktop.svg",
+    "usr/share/icons/hicolor/scalable/apps/gamepad-desktop.svg",
+    "644",
+  ],
+]
 
 [features]
 default = ["bundled-sdl"]
 bundled-sdl = ["sdl3/build-from-source-static", "sdl3/build-from-source-unix-console"]
 
 [dependencies]
+imageproc = { version = "0.27", default-features = false }
 image = { version = "0.25.10", default-features = false, features = ["png"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
@@ -22,8 +47,10 @@ sdl3-sys = { version = "0.7.1", features = [
 ] }
 notify-rust = "4.18.2"
 egui_extras = { version = "0.37", default-features = false, features = ["svg"] }
+sha2 = "0.11.1"
 
 [target.'cfg(target_os = "linux")'.dependencies]
+reqwest = { version = "0.13.5", default-features = false, features = ["blocking", "json", "rustls"] }
 evdev = "0.13.2"
 atspi = { version = "0.29", default-features = false, features = ["proxies", "zbus"] }
 zbus = { version = "5", default-features = false, features = ["async-io"] }
@@ -35,30 +62,44 @@ egui-overlay = { package = "egui", version = "0.34", default-features = false, f
 ] }
 egui_software_backend = { version = "0.0.3", default-features = false, features = ["std"] }
 rustix = { version = "1.1.5", features = ["event"] }
+xcursor = "0.3.11"
 smithay-client-toolkit = "0.19.2"
 wayland-client = "0.31"
 
 [target.'cfg(target_os = "windows")'.dependencies]
 enigo = { version = "0.6.1", default-features = false }
+reqwest = { version = "0.13.5", default-features = false, features = ["blocking", "json", "native-tls"] }
 windows = { version = "0.62", features = [
   "Win32_System_Com",
   "Win32_System_Com_StructuredStorage",
   "Win32_System_Threading",
+  "Win32_System_LibraryLoader",
   "Win32_System_Registry",
   "Win32_Security",
   "Win32_Globalization",
   "Win32_Graphics_Gdi",
   "Win32_UI_HiDpi",
+  "Win32_UI_Accessibility",
+  "Win32_UI_Input_KeyboardAndMouse",
   "Win32_UI_Shell",
   "Win32_UI_Shell_PropertiesSystem",
   "Win32_UI_WindowsAndMessaging",
   "Win32_System_Variant",
+  "UI_ViewManagement_Core",
 ] }
 
 [dependencies.eframe]
 version = "0.37"
 default-features = false
-features = ["accesskit", "default_fonts", "glow", "links", "wayland", "x11"]
+features = [
+  "accesskit",
+  "clipboard",
+  "default_fonts",
+  "glow",
+  "links",
+  "wayland",
+  "x11",
+]
 
 [build-dependencies]
 winres = "0.1.12"
