@@ -6,54 +6,76 @@
     <meta name="theme-color" content="#080b16" />
     <meta
       name="description"
-      content="Use your gamepad to move, click, scroll, and type on Windows or Linux from the couch. Free and open source."
+      content="Control your Windows or Linux desktop with a gamepad. Move, click, scroll, and type from the couch. Free, open source, and built for your controller."
     />
+    <meta name="robots" content="index, follow, max-image-preview:large" />
     <meta property="og:type" content="website" />
     <meta property="og:site_name" content="Gamepad Desktop" />
+    <meta property="og:locale" content="en_US" />
     <link rel="canonical" href="https://gamepaddesktop.ac-jr.com/" />
     <meta property="og:url" content="https://gamepaddesktop.ac-jr.com/" />
-    <meta
-      property="og:title"
-      content="Gamepad Desktop — Free Windows &amp; Linux Gamepad Control"
-    />
+    <meta property="og:title" content="Gamepad Desktop — Your controller. Your whole desktop." />
     <meta
       property="og:description"
-      content="Use your gamepad to move, click, scroll, and type on Windows or Linux from the couch. Free and open source."
+      content="Move, click, scroll, and type on Windows or Linux from the couch. Free and open source."
     />
+    <meta property="og:image" content="https://gamepaddesktop.ac-jr.com/assets/social-card.png" />
     <meta
-      property="og:image"
-      content="https://gamepaddesktop.ac-jr.com/assets/couch-windows-scenes.png"
+      property="og:image:secure_url"
+      content="https://gamepaddesktop.ac-jr.com/assets/social-card.png"
     />
     <meta property="og:image:type" content="image/png" />
-    <meta property="og:image:width" content="1439" />
-    <meta property="og:image:height" content="1093" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
     <meta
       property="og:image:alt"
-      content="Three scenes of a man on a couch using a gamepad with Windows, YouTube in a browser, and a PC game."
+      content="Gamepad Desktop: your controller, your whole desktop. Free and open source for Windows and Linux, with the green gamepad and desktop cursor logo."
     />
     <meta name="twitter:card" content="summary_large_image" />
-    <meta
-      name="twitter:title"
-      content="Gamepad Desktop — Free Windows &amp; Linux Gamepad Control"
-    />
+    <meta name="twitter:title" content="Gamepad Desktop — Your controller. Your whole desktop." />
     <meta
       name="twitter:description"
-      content="Use your gamepad to move, click, scroll, and type on Windows or Linux from the couch. Free and open source."
+      content="Move, click, scroll, and type on Windows or Linux from the couch. Free and open source."
     />
-    <meta
-      name="twitter:image"
-      content="https://gamepaddesktop.ac-jr.com/assets/couch-windows-scenes.png"
-    />
+    <meta name="twitter:image" content="https://gamepaddesktop.ac-jr.com/assets/social-card.png" />
     <meta
       name="twitter:image:alt"
-      content="Three scenes of a man on a couch using a gamepad with Windows, YouTube in a browser, and a PC game."
+      content="Gamepad Desktop: your controller, your whole desktop. Free and open source for Windows and Linux, with the green gamepad and desktop cursor logo."
     />
     <link rel="icon" href="./assets/gamepad-desktop-icon.svg" type="image/svg+xml" />
     <link rel="icon" href="./assets/favicon.ico" sizes="any" />
     <link rel="icon" href="./assets/favicon-32.png" type="image/png" sizes="32x32" />
     <link rel="apple-touch-icon" href="./assets/apple-touch-icon.png" sizes="180x180" />
     <link rel="stylesheet" href="./styles.css" />
-    <title>Gamepad Desktop — Free Windows &amp; Linux Gamepad Control</title>
+    <title>Gamepad Desktop — Control Windows &amp; Linux with a Gamepad</title>
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@graph": [
+          {
+            "@type": "WebSite",
+            "@id": "https://gamepaddesktop.ac-jr.com/#website",
+            "name": "Gamepad Desktop",
+            "url": "https://gamepaddesktop.ac-jr.com/",
+            "inLanguage": "en"
+          },
+          {
+            "@type": "SoftwareApplication",
+            "@id": "https://gamepaddesktop.ac-jr.com/#app",
+            "name": "Gamepad Desktop",
+            "url": "https://gamepaddesktop.ac-jr.com/",
+            "description": "Control your Windows or Linux desktop with a gamepad. Move, click, scroll, and type from the couch.",
+            "applicationCategory": "UtilitiesApplication",
+            "operatingSystem": ["Windows", "Linux"],
+            "image": "https://gamepaddesktop.ac-jr.com/assets/social-card.png",
+            "isAccessibleForFree": true,
+            "license": "https://opensource.org/license/mit",
+            "downloadUrl": "https://github.com/andrecrjr/GamepadDesktop/releases/latest",
+            "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" }
+          }
+        ]
+      }
+    </script>
     <!-- Google tag (gtag.js) -->
     <script async src="https://www.googletagmanager.com/gtag/js?id=G-Y7Z4HB2JZX"></script>
     <script>
@@ -74,8 +96,9 @@
           <span>GAMEPAD <strong>DESKTOP</strong></span>
         </a>
         <nav class="site-nav" aria-label="Main navigation">
-          <a href="#benefits">Why it helps</a>
+          <a href="#benefits">Features</a>
           <a href="#how-it-works">How it works</a>
+          <a href="#faq">FAQ</a>
           <a class="nav-download" href="#download">Download <span aria-hidden="true">↓</span></a>
         </nav>
       </header>
@@ -83,27 +106,30 @@
       <main id="main">
         <section class="hero" id="top" aria-labelledby="hero-title">
           <div class="hero-copy">
-            <p class="eyebrow">STEAM · EMULATORS · PC PORTS</p>
-            <h1 id="hero-title">Take your PC setup to the couch.</h1>
+            <p class="eyebrow">WINDOWS + LINUX · FREE &amp; OPEN SOURCE</p>
+            <h1 id="hero-title">Your controller.<br /><span>Your whole desktop.</span></h1>
             <p class="hero-description">
-              Got your Steam library, emulators, and PC ports all on one machine? Gamepad Desktop
-              lets you browse desktop menus with the controller you already own. Move, click,
-              scroll, and type from the couch or bed, and leave the mouse and keyboard at the desk.
+              Turn your gamepad into a mouse and keyboard. Browse, click, scroll, and type on your
+              PC without leaving the couch. Keep your controller in hand between games.
             </p>
+          </div>
+          <div class="hero-downloads">
             <div class="download-actions" id="download" aria-label="Download Gamepad Desktop">
               <a
                 class="download-card download-windows"
+                data-demo-target="windows"
                 href="https://github.com/andrecrjr/GamepadDesktop/releases/latest/download/GamepadDesktop-Windows-x64.exe"
               >
-                <span class="download-name">Free download for Windows</span>
+                <span class="download-name">Download for Windows</span>
                 <span class="download-format">Windows x64 · EXE</span>
                 <span class="download-icon" aria-hidden="true">↓</span>
               </a>
               <a
                 class="download-card download-linux"
+                data-demo-target="linux"
                 href="https://github.com/andrecrjr/GamepadDesktop/releases/latest/download/GamepadDesktop-Linux-x64.tar.gz"
               >
-                <span class="download-name">Free download for Linux</span>
+                <span class="download-name">Download for Linux</span>
                 <span class="download-format">Linux x64 · TAR.GZ</span>
                 <span class="download-icon" aria-hidden="true">↓</span>
               </a>
@@ -114,7 +140,7 @@
                 class="setup-link"
                 href="https://github.com/andrecrjr/GamepadDesktop/blob/main/LICENSE"
                 >MIT License</a
-              >. Still in development, so check the
+              >. Read the
               <a
                 class="setup-link"
                 href="https://github.com/andrecrjr/GamepadDesktop/blob/main/desktop/README.md"
@@ -122,20 +148,107 @@
               >
               before you install.
             </p>
+            <ul class="hero-tags" aria-label="Good for">
+              <li>Steam &amp; launchers</li>
+              <li>Emulators &amp; PC ports</li>
+              <li>Browsers &amp; desktop apps</li>
+            </ul>
           </div>
 
           <figure class="hero-visual" aria-labelledby="visual-caption">
-            <img
-              class="couch-scenes"
-              src="./assets/couch-windows-scenes.png"
-              alt="Three moments of a man using a gamepad from the couch: Windows desktop, YouTube in a browser, and a Windows PC game."
-              width="1448"
-              height="1086"
-            />
+            <svg class="controller-demo" viewBox="0 0 520 320" fill="none" aria-hidden="true">
+              <ellipse cx="260" cy="297" rx="156" ry="18" fill="#02060d" opacity=".45" />
+              <path
+                d="M182 83h156c22 0 39 15 45 37l29 110c7 27-6 45-27 45-13 0-24-8-35-22l-26-34H196l-26 34c-11 14-22 22-35 22-21 0-34-18-27-45l29-110c6-22 23-37 45-37Z"
+                fill="#1b293c"
+                stroke="#52667f"
+                stroke-width="3"
+              />
+              <path
+                d="M182 91h156c18 0 31 12 36 31"
+                stroke="#8fffc7"
+                stroke-width="2"
+                opacity=".7"
+              />
+              <rect x="232" y="100" width="56" height="39" rx="7" fill="#0a111f" stroke="#40536a" />
+              <path d="m251 109 0 22 6-6 9 1Z" fill="#a899ff" />
+              <circle cx="175" cy="150" r="29" fill="#0c1422" stroke="#40536a" stroke-width="2" />
+              <g class="demo-stick">
+                <circle cx="175" cy="150" r="20" fill="#31465b" stroke="#8fffc7" stroke-width="2" />
+                <circle cx="175" cy="150" r="12" stroke="#506a7f" />
+              </g>
+              <path
+                d="M212 177h12v12h12v12h-12v12h-12v-12h-12v-12h12Z"
+                fill="#0a111f"
+                stroke="#52667f"
+                stroke-width="2"
+              />
+              <circle cx="302" cy="195" r="20" fill="#0c1422" stroke="#52667f" stroke-width="2" />
+              <g class="demo-face-buttons">
+                <circle cx="345" cy="126" r="12" fill="#26354a" stroke="#a899ff" />
+                <circle cx="321" cy="150" r="12" fill="#26354a" stroke="#a899ff" />
+                <circle cx="369" cy="150" r="12" fill="#26354a" stroke="#a899ff" />
+                <circle class="demo-button-a" cx="345" cy="174" r="12" fill="#8fffc7" />
+                <g
+                  fill="#c9bdff"
+                  text-anchor="middle"
+                  dominant-baseline="central"
+                  font-size="11"
+                  font-family="sans-serif"
+                  font-weight="700"
+                >
+                  <text x="345" y="126">Y</text>
+                  <text x="321" y="150">X</text>
+                  <text x="369" y="150">B</text>
+                  <text x="345" y="174" fill="#0a111f">A</text>
+                </g>
+              </g>
+              <g class="demo-thumb-left" fill="#dca78b" stroke="#68493f" stroke-width="3">
+                <path
+                  d="M151 191c-7-5-8-14-3-22l16-25c5-8 15-10 22-5 8 5 10 14 5 22l-16 25c-5 8-16 11-24 5Z"
+                />
+                <rect
+                  x="168"
+                  y="141"
+                  width="16"
+                  height="20"
+                  rx="7"
+                  transform="rotate(32 176 151)"
+                  fill="#f0c6ae"
+                  stroke-width="1.5"
+                />
+                <path d="m154 177 12 8" stroke="#b57965" stroke-width="2" />
+              </g>
+              <g class="demo-thumb-right" fill="#dca78b" stroke="#68493f" stroke-width="3">
+                <path
+                  d="M381 222c7-6 7-15 2-23l-13-21c-5-8-15-10-22-5-8 5-10 15-5 23l13 21c5 8 17 11 25 5Z"
+                />
+                <rect
+                  x="349"
+                  y="175"
+                  width="16"
+                  height="20"
+                  rx="7"
+                  transform="rotate(-32 357 185)"
+                  fill="#f0c6ae"
+                  stroke-width="1.5"
+                />
+                <path d="m363 208 12-8" stroke="#b57965" stroke-width="2" />
+              </g>
+            </svg>
             <figcaption class="visually-hidden" id="visual-caption">
-              A couch gamer switches between a Windows desktop, YouTube in a browser, and a PC game.
+              A little stick movement. Your whole desktop.
             </figcaption>
           </figure>
+          <svg class="demo-cursor" viewBox="0 0 32 36" aria-hidden="true" hidden>
+            <path
+              d="M3 3v25l7-7 5 11 6-3-5-10 11-2Z"
+              fill="#f4f7ff"
+              stroke="#080b16"
+              stroke-width="2"
+              stroke-linejoin="round"
+            />
+          </svg>
         </section>
 
         <section class="benefits" id="benefits" aria-labelledby="benefits-title">
@@ -146,35 +259,89 @@
           <div class="benefit-grid">
             <article class="benefit-card">
               <span class="benefit-number">01</span>
-              <h3>Point, click, and scroll</h3>
+              <h3>A mouse in your hands</h3>
               <p>
-                Use the stick like a mouse. Click, drag, and scroll with the buttons you already
-                know.
+                Move with the stick. Click, drag, and scroll with your controller. Adjust pointer
+                speed and deadzone to suit your hands.
               </p>
             </article>
             <article class="benefit-card">
               <span class="benefit-number">02</span>
               <h3>Type from the couch</h3>
-              <p>Open the on-screen keyboard and type into the window you’re already using.</p>
+              <p>
+                Open an on-screen keyboard and type with your controller. Keyboard support depends
+                on your operating system and desktop environment.
+              </p>
             </article>
             <article class="benefit-card">
               <span class="benefit-number">03</span>
-              <h3>Tuck the panel away</h3>
-              <p>Send it to the system tray when you’re done. Your controller stays ready.</p>
+              <h3>Stay ready between games</h3>
+              <p>Switch between Desktop and Game modes, or tuck the app into the system tray.</p>
             </article>
+          </div>
+        </section>
+
+        <section class="feature-spotlight" id="controls" aria-labelledby="controls-title">
+          <div class="spotlight-copy">
+            <p class="eyebrow">FAMILIAR BUTTONS. EVERYDAY ACTIONS.</p>
+            <h2 id="controls-title">A few controls.<br />A lot less reaching.</h2>
+            <p>
+              Move the pointer, click, scroll, and open the keyboard with the controller you already
+              have. Switch to Game mode when you want the game to handle your inputs.
+            </p>
+            <p>
+              New to the controls? The welcome tour lets you practice moving, clicking, scrolling,
+              and typing, or watch a demo before trying it yourself.
+            </p>
+            <a
+              class="setup-link"
+              href="https://github.com/andrecrjr/GamepadDesktop/blob/main/desktop/README.md#controls"
+              >See the complete control guide <span aria-hidden="true">↗</span></a
+            >
+          </div>
+          <div class="controls-guide">
+            <p class="eyebrow">DESKTOP MODE · QUICK REFERENCE</p>
+            <dl>
+              <div>
+                <dt>Left stick</dt>
+                <dd>Move the pointer</dd>
+              </div>
+              <div>
+                <dt>Right stick ↕</dt>
+                <dd>Scroll the page</dd>
+              </div>
+              <div>
+                <dt><kbd>A / ✕</kbd></dt>
+                <dd>Click · hold to drag</dd>
+              </div>
+              <div>
+                <dt><kbd>B / ○</kbd></dt>
+                <dd>Right-click</dd>
+              </div>
+              <div>
+                <dt><kbd>R3</kbd></dt>
+                <dd>Open or close the keyboard</dd>
+              </div>
+              <div>
+                <dt>Select / View ×2</dt>
+                <dd>Desktop ↔ Game</dd>
+              </div>
+            </dl>
+            <p class="controls-note">
+              Xbox / PlayStation labels. Follow the button positions shown in the app.
+            </p>
           </div>
         </section>
 
         <section class="how-it-works" id="pc-gaming" aria-labelledby="pc-gaming-title">
           <div class="section-heading">
             <p class="eyebrow">FOR PC GAMING TINKERERS</p>
-            <h2 id="pc-gaming-title">For the rabbit holes around your games.</h2>
+            <h2 id="pc-gaming-title">For everything between your games.</h2>
           </div>
           <p class="hero-description">
-            From emulator menus and launcher settings to mods and game decompilation or
-            recompilation projects, PC gaming can mean plenty of time on the desktop. Gamepad
-            Desktop lets you move, click, scroll, and type in Windows and Linux apps with a gamepad.
-            It’s free and open source under MIT.
+            Launcher settings. Emulator menus. A browser search for that one mod. From PC ports to
+            decompilation and recompilation projects, your setup can take you well beyond a game's
+            menus. Keep the desktop within reach with the controller you already own.
           </p>
         </section>
 
@@ -186,11 +353,11 @@
           <ol class="steps-list">
             <li>
               <span>01</span><strong>Download your build</strong>
-              <p>Pick the Windows or Linux x64 download.</p>
+              <p>Open the Windows EXE or extract the Linux archive. Check the setup notes first.</p>
             </li>
             <li>
               <span>02</span><strong>Connect your controller</strong>
-              <p>Open Gamepad Desktop and select your gamepad.</p>
+              <p>Open Gamepad Desktop, select your gamepad, and follow the welcome tour.</p>
             </li>
             <li>
               <span>03</span><strong>Settle in</strong>
@@ -208,11 +375,65 @@
           <details>
             <summary>Linux setup notes</summary>
             <p>
-              Linux needs input device permissions. The on-screen keyboard isn’t available on GNOME
-              Wayland.
+              Linux needs input device permissions. Keyboard integration depends on your desktop and
+              compositor. Read the
+              <a
+                class="setup-link"
+                href="https://github.com/andrecrjr/GamepadDesktop/blob/main/desktop/README.md"
+                >platform setup notes</a
+              >
+              before installing.
             </p>
           </details>
         </aside>
+
+        <section class="faq" id="faq" aria-labelledby="faq-title">
+          <div class="section-heading">
+            <p class="eyebrow">A FEW GOOD QUESTIONS</p>
+            <h2 id="faq-title">Before you settle in.</h2>
+          </div>
+          <details>
+            <summary>Is Gamepad Desktop free?</summary>
+            <p>
+              Yes. It is free and open source under the MIT License. You can inspect the source on
+              <a href="https://github.com/andrecrjr/GamepadDesktop">GitHub</a>.
+            </p>
+          </details>
+          <details>
+            <summary>Does it add controller support to games?</summary>
+            <p>
+              It controls the desktop using mouse and keyboard input. Native controller support
+              inside a game is handled by the game itself.
+            </p>
+          </details>
+          <details>
+            <summary>Which controller can I use?</summary>
+            <p>
+              Select a controller recognized by the app. If yours needs a mapping, you can import an
+              SDL controller mapping in the app's settings.
+            </p>
+          </details>
+          <details>
+            <summary>Can I adjust how the pointer feels?</summary>
+            <p>
+              Yes. Adjust pointer speed and deadzone in Settings. You can also change the interface
+              size. The app saves your preferences for the next session.
+            </p>
+          </details>
+          <details>
+            <summary>How does the on-screen keyboard work?</summary>
+            <p>
+              Windows uses the system touch keyboard. Linux/X11 uses the app's keyboard; on Wayland,
+              support depends on your compositor, with COSMIC keyboard integration when available.
+              The app's keyboard is unavailable on GNOME Wayland. See the
+              <a
+                href="https://github.com/andrecrjr/GamepadDesktop/blob/main/desktop/README.md#on-screen-keyboard"
+                >keyboard guide</a
+              >
+              for your setup.
+            </p>
+          </details>
+        </section>
 
         <section class="closing-cta" aria-labelledby="closing-title">
           <div>
@@ -237,5 +458,6 @@
         >
       </footer>
     </div>
+    <script type="module" src="./landing-animation.js"></script>
   </body>
 </html>

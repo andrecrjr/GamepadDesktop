@@ -1,0 +1,46 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630">
+  <title>Gamepad Desktop — your controller, your whole desktop</title>
+  <desc>Free and open source desktop control for Windows and Linux.</desc>
+  <defs>
+    <linearGradient id="background" x2="1" y2="1">
+      <stop stop-color="#101d2b" />
+      <stop offset="1" stop-color="#101020" />
+    </linearGradient>
+    <radialGradient id="glow">
+      <stop stop-color="#72f3bb" stop-opacity=".16" />
+      <stop offset="1" stop-color="#72f3bb" stop-opacity="0" />
+    </radialGradient>
+    <g id="logo">
+      <path d="M198 88h116c18 0 30 12 30 30v40h26c35 0 59 23 69 59l28 126c7 30-12 56-40 56-16 0-28-7-39-21l-45-58c-9-12-22-18-37-18H206c-15 0-28 6-37 18l-45 58c-11 14-23 21-39 21-28 0-47-26-40-56l28-126c10-36 34-59 69-59h26v-40c0-18 12-30 30-30z" fill="#72f3bb" stroke="#0a111f" stroke-linejoin="round" stroke-width="12" />
+      <rect x="188" y="108" width="136" height="104" rx="12" fill="#0a111f" />
+      <path d="M240 127v65l17-18 23 3z" fill="#9681f6" stroke="#9681f6" stroke-linejoin="round" stroke-width="4" />
+      <path d="M127 207h22v27h27v22h-27v27h-22v-27h-27v-22h27z" fill="#0a111f" />
+      <g fill="#0a111f">
+        <circle cx="374" cy="214" r="13" />
+        <circle cx="404" cy="244" r="13" />
+        <circle cx="374" cy="274" r="13" />
+        <circle cx="344" cy="244" r="13" />
+      </g>
+      <rect x="238" y="236" width="36" height="10" rx="5" fill="#0a111f" />
+    </g>
+  </defs>
+  <rect width="1200" height="630" fill="#080b16" />
+  <rect x="16" y="16" width="1168" height="598" rx="24" fill="url(#background)" stroke="#2b3b4b" />
+  <circle cx="970" cy="307" r="245" fill="url(#glow)" />
+  <circle cx="970" cy="307" r="179" fill="none" stroke="#72f3bb" stroke-opacity=".16" />
+  <circle cx="970" cy="307" r="147" fill="none" stroke="#a899ff" stroke-opacity=".15" />
+  <use href="#logo" transform="translate(60 52) scale(.109375)" />
+  <g font-family="DejaVu Sans, sans-serif">
+    <text x="132" y="88" fill="#f4f7ff" font-size="23" font-weight="700" letter-spacing="2">GAMEPAD <tspan fill="#8fffc7">DESKTOP</tspan></text>
+    <text x="72" y="188" fill="#8fffc7" font-size="14" font-weight="700" letter-spacing="3">LESS DESK. MORE COUCH.</text>
+    <text x="68" y="278" fill="#f4f7ff" font-size="62" font-weight="700" letter-spacing="-2">Your controller.</text>
+    <text x="68" y="354" fill="#8fffc7" font-size="62" font-weight="700" letter-spacing="-2">Your whole desktop.</text>
+    <text x="72" y="414" fill="#b4bfd5" font-size="25">Move. Click. Scroll. Type.</text>
+    <rect x="72" y="458" width="240" height="44" rx="22" fill="#8fffc7" fill-opacity=".08" stroke="#8fffc7" stroke-opacity=".3" />
+    <text x="192" y="486" fill="#8fffc7" font-size="16" text-anchor="middle">Windows + Linux</text>
+    <path d="M72 540H1128" stroke="#2b3b4b" />
+    <text x="72" y="580" fill="#a6b4cb" font-size="18">gamepaddesktop.ac-jr.com</text>
+    <text x="1128" y="580" fill="#f4f7ff" font-size="17" font-weight="700" text-anchor="end">FREE &amp; OPEN SOURCE</text>
+  </g>
+  <use href="#logo" transform="translate(808 145) scale(.6328125)" />
+</svg>
