@@ -561,14 +561,43 @@ h3 {
   transform-box: view-box;
   transform-origin: 175px 150px;
   will-change: transform;
-  transition: transform 60ms linear;
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+  outline: none;
+}
+
+.demo-stick:hover circle:first-child,
+.demo-stick:focus-visible circle:first-child {
+  stroke-width: 2.8px;
+  filter: drop-shadow(0 0 8px #8fffc7);
+}
+
+.demo-stick.is-dragging {
+  cursor: grabbing;
 }
 
 .demo-stick-right {
   transform-box: view-box;
   transform-origin: 302px 195px;
   will-change: transform;
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+  outline: none;
   transition: transform 60ms linear;
+}
+
+.demo-stick-right:hover circle:first-child,
+.demo-stick-right:focus-visible circle:first-child {
+  stroke: #8fffc7;
+  stroke-width: 2.4px;
+  filter: drop-shadow(0 0 8px #8fffc7);
+}
+
+.demo-stick-right.is-dragging {
+  cursor: grabbing;
+  transition: none;
 }
 
 .demo-btn {
@@ -621,7 +650,7 @@ h3 {
   transform-box: view-box;
   transform-origin: 176px 151px;
   will-change: transform;
-  transition: transform 60ms linear;
+  pointer-events: none;
 }
 
 .demo-thumb-right {
@@ -702,6 +731,31 @@ h3 {
     opacity: 0;
     transform: scale(2.4);
   }
+}
+
+/* ---------------------------------------------------------
+   SIMULATED CONTROLLER POINTER HOVER STATES
+   Matches the exact original site :hover styles without outlines
+--------------------------------------------------------- */
+.site-nav a.is-sim-hover,
+.site-footer a.is-sim-hover,
+.setup-link.is-sim-hover,
+summary.is-sim-hover {
+  color: var(--accent);
+}
+
+.download-card.is-sim-hover {
+  transform: translateY(-2px);
+  background: #b0ffdb;
+}
+
+.download-linux.is-sim-hover {
+  background: rgb(255 255 255 / 8%);
+}
+
+.button-primary.is-sim-hover {
+  transform: translateY(-2px);
+  background: #b0ffdb;
 }
 
 .visually-hidden {
