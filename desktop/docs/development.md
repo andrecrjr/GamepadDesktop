@@ -87,7 +87,7 @@ As cópias geradas são versionadas para o build Rust funcionar sem Node. O ICO 
 
 ## Releases
 
-Commits convencionais em `main` alimentam o semantic-release. As releases usam tags `desktop-v*` e anexam o executável Windows x64, os pacotes Linux `.deb`/`.tar.gz` e os metadados de revisão usados pelo atualizador. A extensão tem validação e empacotamento próprios.
+Commits convencionais em `main` alimentam o semantic-release, exceto commits com escopo `site`, que não geram release do desktop. As releases usam tags `desktop-v*` e anexam o executável Windows x64, os pacotes Linux `.deb`/`.tar.gz` e os metadados de revisão usados pelo atualizador. A extensão tem validação e empacotamento próprios.
 
 A versão é definida antes de compilar:
 
