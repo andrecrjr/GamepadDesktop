@@ -24,6 +24,23 @@ use crate::{
 const ACTIVE_POLL_INTERVAL: Duration = Duration::from_millis(8);
 const IDLE_POLL_INTERVAL: Duration = Duration::from_millis(16);
 
+// A blocked native controller call cannot observe the runtime's stop flag.
+#[cfg(any(target_os = "windows", test))]
+fn guard_shutdown(
+    completion: std::sync::mpsc::Receiver<()>,
+    timeout: Duration,
+    restore_cursor: impl FnOnce(),
+    force_exit: impl FnOnce(),
+) {
+    if matches!(
+        completion.recv_timeout(timeout),
+        Err(std::sync::mpsc::RecvTimeoutError::Timeout)
+    ) {
+        restore_cursor();
+        force_exit();
+    }
+}
+
 #[cfg(test)]
 #[path = "onboarding_runtime_tests.rs"]
 mod onboarding_tests;
@@ -58,6 +75,10 @@ pub struct DesktopRuntime {
     stop: Arc<AtomicBool>,
     worker: Option<JoinHandle<()>>,
     notifications: NotificationService,
+    #[cfg(target_os = "windows")]
+    shutdown_completion: Mutex<Option<std::sync::mpsc::Receiver<()>>>,
+    #[cfg(target_os = "windows")]
+    cursor_recovery: crate::platform::CursorRecovery,
 }
 
 impl RuntimeState {
@@ -107,7 +128,14 @@ impl Default for DesktopRuntime {
         let worker_state = Arc::clone(&state);
         let worker_stop = Arc::clone(&stop);
         let worker_notifications = notifications.clone();
+        #[cfg(target_os = "windows")]
+        let (completion, shutdown_completion) = std::sync::mpsc::channel();
+        #[cfg(target_os = "windows")]
+        let cursor_recovery = crate::platform::CursorRecovery::capture();
         let worker = thread::spawn(move || {
+            // Dropping this sender signals completion, including during unwinding.
+            #[cfg(target_os = "windows")]
+            let _completion = completion;
             if let Err(error) = run(&worker_state, &worker_stop, &worker_notifications) {
                 let locale = {
                     let mut state = worker_state.lock().expect("runtime state lock");
@@ -127,6 +155,10 @@ impl Default for DesktopRuntime {
             stop,
             worker: Some(worker),
             notifications,
+            #[cfg(target_os = "windows")]
+            shutdown_completion: Mutex::new(Some(shutdown_completion)),
+            #[cfg(target_os = "windows")]
+            cursor_recovery,
         }
     }
 }
@@ -134,6 +166,30 @@ impl Default for DesktopRuntime {
 impl DesktopRuntime {
     pub fn begin_shutdown(&self) {
         self.stop.store(true, Ordering::Relaxed);
+        #[cfg(target_os = "windows")]
+        if let Some(completion) = self
+            .shutdown_completion
+            .lock()
+            .expect("shutdown completion lock")
+            .take()
+        {
+            let cursor_recovery = self.cursor_recovery.clone();
+            thread::spawn(move || {
+                guard_shutdown(
+                    completion,
+                    Duration::from_secs(5),
+                    || {
+                        if let Err(error) = cursor_recovery.restore() {
+                            eprintln!("Windows cursor recovery failed: {error}");
+                        }
+                    },
+                    || {
+                        // Do not wait on worker locks or destructors again here.
+                        std::process::exit(1);
+                    },
+                );
+            });
+        }
     }
 
     /// Returns true after the worker stops and releases its owned resources.
@@ -739,6 +795,31 @@ fn publish_keyboard_state(state: &mut KeyboardSession, keyboard: &KeyboardSessio
 mod tests {
     use super::*;
     use crate::control::GamepadFrame;
+
+    #[test]
+    fn shutdown_watchdog_exits_when_cleanup_is_stuck() {
+        let (_worker, completion) = std::sync::mpsc::channel::<()>();
+        let events = std::cell::RefCell::new(Vec::new());
+        guard_shutdown(
+            completion,
+            Duration::ZERO,
+            || events.borrow_mut().push("restore cursor"),
+            || events.borrow_mut().push("exit"),
+        );
+        assert_eq!(*events.borrow(), ["restore cursor", "exit"]);
+    }
+
+    #[test]
+    fn shutdown_watchdog_allows_completed_cleanup() {
+        let (worker, completion) = std::sync::mpsc::channel::<()>();
+        drop(worker);
+        guard_shutdown(
+            completion,
+            Duration::ZERO,
+            || panic!("normal shutdown already restored the cursor"),
+            || panic!("finished workers must not force an exit"),
+        );
+    }
 
     #[test]
     fn focused_input_tracker_is_lazy_and_scoped_to_the_open_keyboard() {

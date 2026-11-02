@@ -14,6 +14,8 @@ Download the files from the [latest release](https://github.com/andrecrjr/Gamepa
 
 The tray menu lets you open or hide the panel and quit the app. On first launch, the app creates a per-user Start menu shortcut to identify its notifications.
 
+If controller input freezes, choose **Quit** and reopen the app. Windows shutdown allows five seconds for normal cleanup. If the worker stays stuck, a separate thread restores the original cursor size and visibility before forcing the process to exit. Windows API failures can still prevent restoration, and recent settings may be unsaved; this fallback does not repair the underlying controller connection.
+
 ### Linux
 
 On Debian, Ubuntu, and derivatives, x64, install `GamepadDesktop-Linux-x64.deb` through your software center or terminal:
