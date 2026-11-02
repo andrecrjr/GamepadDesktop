@@ -7,7 +7,8 @@ use windows::{
             RegSetValueExW,
         },
         UI::WindowsAndMessaging::{
-            SPIF_SENDCHANGE, SYSTEM_PARAMETERS_INFO_ACTION, SystemParametersInfoW,
+            SPIF_SENDCHANGE, SYSTEM_PARAMETERS_INFO_ACTION, SYSTEM_PARAMETERS_INFO_UPDATE_FLAGS,
+            SystemParametersInfoW,
         },
     },
     core::w,
@@ -72,6 +73,52 @@ pub(crate) struct WindowsCursorScale {
     current_size: Option<u32>,
     modified: bool,
     supported: bool,
+}
+
+/// Captured before the input worker starts; recovery never takes its locks.
+#[derive(Clone)]
+pub(crate) struct CursorRecovery {
+    original: Result<Option<RegistryCursorSize>, String>,
+}
+
+impl CursorRecovery {
+    pub(crate) fn capture() -> Self {
+        Self {
+            original: read_cursor_size(),
+        }
+    }
+
+    pub(crate) fn restore(&self) -> Result<(), String> {
+        let result = (|| {
+            let original = self.original.as_ref().map_err(Clone::clone)?;
+            let size = match original {
+                Some(value) => value
+                    .pixels()
+                    .filter(|size| *size > 0)
+                    .ok_or("Invalid original Windows cursor size")?,
+                None => DEFAULT_CURSOR_SIZE,
+            };
+            // Do not synchronously broadcast to other apps during emergency cleanup.
+            restore_cursor_size(original, size, SYSTEM_PARAMETERS_INFO_UPDATE_FLAGS(0))
+        })();
+        if result.is_err() {
+            // Even if size restoration failed, try to undo hidden cursor shapes.
+            let _ = reload_system_cursors();
+        }
+        result
+    }
+}
+
+fn restore_cursor_size(
+    original: &Option<RegistryCursorSize>,
+    size: u32,
+    flags: SYSTEM_PARAMETERS_INFO_UPDATE_FLAGS,
+) -> Result<(), String> {
+    match original {
+        Some(value) => write_cursor_size_value(value)?,
+        None => delete_cursor_size()?,
+    }
+    apply_system_cursor_size(size, flags)
 }
 
 #[cfg(test)]
@@ -165,18 +212,14 @@ impl WindowsCursorScale {
 
     fn apply_size(&self, size: u32) -> Result<(), String> {
         write_cursor_size(size)?;
-        apply_system_cursor_size(size)
+        apply_system_cursor_size(size, SPIF_SENDCHANGE)
     }
 
     fn restore(&mut self) -> Result<(), String> {
         if !self.modified {
             return Ok(());
         }
-        match self.original.as_ref() {
-            Some(value) => write_cursor_size_value(value)?,
-            None => delete_cursor_size()?,
-        }
-        apply_system_cursor_size(self.base_size)?;
+        restore_cursor_size(&self.original, self.base_size, SPIF_SENDCHANGE)?;
         self.current_size = Some(self.base_size);
         self.modified = false;
         Ok(())
@@ -307,7 +350,10 @@ fn reload_system_cursors() -> Result<(), String> {
         .map_err(|error| format!("Could not refresh Windows cursors: {error}"))
 }
 
-fn apply_system_cursor_size(size: u32) -> Result<(), String> {
+fn apply_system_cursor_size(
+    size: u32,
+    flags: SYSTEM_PARAMETERS_INFO_UPDATE_FLAGS,
+) -> Result<(), String> {
     // Windows exposes this cursor-size action through SystemParametersInfoW
     // without a named constant in the SDK.
     unsafe {
@@ -315,7 +361,7 @@ fn apply_system_cursor_size(size: u32) -> Result<(), String> {
             SPI_SET_CURSOR_BASE_SIZE,
             0,
             Some(size as usize as *mut std::ffi::c_void),
-            SPIF_SENDCHANGE,
+            flags,
         )
     }
     .map_err(|error| format!("Could not apply Windows cursor size ({error})"))?;

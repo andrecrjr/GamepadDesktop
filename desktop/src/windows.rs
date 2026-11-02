@@ -33,6 +33,7 @@ use windows::{
     },
     core::{BOOL, PWSTR},
 };
+pub(crate) use windows_cursor_scale::CursorRecovery;
 use windows_cursor_scale::WindowsCursorScale;
 
 const NAVIGATION_TARGET_CHECK_INTERVAL: Duration = Duration::from_millis(50);
