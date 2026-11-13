@@ -24,6 +24,14 @@ pub struct GamepadInfo {
     pub mapped: bool,
 }
 
+/// A snapshot of the selected device, never a persistent hardware identifier.
+#[derive(Debug, serde::Serialize)]
+pub struct GamepadIdentity {
+    pub sdl_instance_id: u32,
+    /// SDL backend path; may be absent or not resolve to a Windows interface.
+    pub path: Option<String>,
+}
+
 pub fn select_device(devices: &[GamepadInfo], selected: Option<u32>) -> Option<u32> {
     devices
         .iter()
@@ -130,6 +138,19 @@ impl Gamepads {
         self.active.as_ref().map(Gamepad::r#type)
     }
 
+    pub fn active_identity(&self) -> Option<GamepadIdentity> {
+        let gamepad = self.active.as_ref().filter(|pad| pad.connected())?;
+        let id = gamepad.id().ok()?;
+        Some(GamepadIdentity {
+            sdl_instance_id: id.raw(),
+            path: self
+                .gamepads
+                .path_for_id(id)
+                .ok()
+                .filter(|path| !path.is_empty()),
+        })
+    }
+
     pub fn import_mapping(&mut self, input: &str) -> Result<(), String> {
         let line = validate_mapping(input)?;
         self.gamepads
@@ -192,6 +213,8 @@ impl Gamepads {
             scroll: normalize(gamepad.axis(Axis::RightY)),
             ..Default::default()
         };
+        frame.buttons[Button::Precision as usize] =
+            normalize(gamepad.axis(Axis::TriggerLeft)) >= 0.5;
         for (button, native) in [
             (Button::South, PadButton::South),
             (Button::East, PadButton::East),

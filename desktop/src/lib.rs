@@ -4,7 +4,6 @@ pub mod focused_input;
 pub mod gamepads;
 pub mod i18n;
 pub mod keyboard;
-pub mod magnetic_cursor;
 pub(crate) mod notifications;
 pub mod onboarding;
 pub mod placement;
