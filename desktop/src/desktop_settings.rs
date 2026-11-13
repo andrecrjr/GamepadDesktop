@@ -1,6 +1,6 @@
 use eframe::egui::{self, Color32};
 use gamepad_desktop::{
-    control::{ControlMode, MAX_PRECISION_SPEED_PERCENT, MIN_PRECISION_SPEED_PERCENT},
+    control::ControlMode,
     cursor_scale::CursorScale,
     i18n::{Locale, Text},
     keyboard::{KeyboardPosition, KeyboardPresentation},
@@ -25,6 +25,131 @@ pub(super) fn show(
     });
     section(ui, state.locale.text(Text::CursorScale), |ui| {
         show_cursor_scale(ui, state, desktop);
+    });
+    section(ui, state.locale.text(Text::MagneticCursorBeta), |ui| {
+        let locale = state.locale;
+        let mut changed = false;
+        ui.add_enabled_ui(cfg!(target_os = "windows"), |ui| {
+            changed |= ui
+                .checkbox(
+                    &mut state.settings.magnetic_cursor.enabled,
+                    locale.text(Text::EnableMagneticCursor),
+                )
+                .changed();
+            ui.add_enabled_ui(state.settings.magnetic_cursor.enabled, |ui| {
+                let mut center_hold = state
+                    .settings
+                    .magnetic_cursor
+                    .center_hold
+                    .unwrap_or(state.settings.magnetic_cursor.strength);
+                state.settings.magnetic_cursor.center_hold = Some(center_hold);
+                changed |= ui
+                    .add(
+                        egui::Slider::new(&mut state.settings.magnetic_cursor.strength, 1..=100)
+                            .text(locale.text(Text::MagneticStrength))
+                            .suffix("%"),
+                    )
+                    .changed();
+                if ui
+                    .add(
+                        egui::Slider::new(&mut center_hold, 0..=100)
+                            .text(locale.text(Text::MagneticCenterHold))
+                            .suffix("%"),
+                    )
+                    .on_hover_text(locale.text(Text::MagneticCenterHoldHelp))
+                    .changed()
+                {
+                    state.settings.magnetic_cursor.center_hold = Some(center_hold);
+                    changed = true;
+                }
+                changed |= ui
+                    .add(
+                        egui::Slider::new(
+                            &mut state.settings.magnetic_cursor.detection_sensitivity,
+                            1..=100,
+                        )
+                        .text(locale.text(Text::MagneticDetectionSensitivity))
+                        .suffix("%"),
+                    )
+                    .on_hover_text(locale.text(Text::MagneticDetectionHelp))
+                    .changed();
+                if ui
+                    .button(locale.text(Text::MagneticResetDefaults))
+                    .clicked()
+                {
+                    state.settings.magnetic_cursor =
+                        gamepad_desktop::magnetic_cursor::MagneticCursorSettings {
+                            enabled: state.settings.magnetic_cursor.enabled,
+                            ..Default::default()
+                        }
+                        .normalized();
+                    changed = true;
+                }
+            });
+        });
+        ui.small(locale.text(Text::MagneticCursorHelp));
+        ui.small(locale.text(Text::MagneticCursorWindowsOnly));
+        egui::CollapsingHeader::new(locale.text(Text::MagneticDiagnostics)).show(ui, |ui| {
+            let diagnostics = state.magnetic_cursor_diagnostics;
+            let status = if !state.settings.magnetic_cursor.enabled {
+                Text::MagneticDebugDisabled
+            } else if !diagnostics.tracking {
+                Text::MagneticDebugWaiting
+            } else if diagnostics.scanner_failed {
+                Text::MagneticDebugUnavailable
+            } else if !diagnostics.scanner_ready {
+                Text::MagneticDebugStarting
+            } else if diagnostics.visual_candidates == 0 {
+                Text::MagneticDebugNoButtons
+            } else {
+                Text::MagneticDebugButtons
+            };
+            ui.label(
+                locale
+                    .text(status)
+                    .replace("{count}", &diagnostics.visual_candidates.to_string()),
+            );
+            ui.label(
+                locale
+                    .text(Text::MagneticDebugCorrection)
+                    .replace("{pixels}", &diagnostics.correction_px.to_string()),
+            );
+            ui.small(locale.text(Text::MagneticDebugHint));
+            let report = format!(
+                "Magnetic cursor: enabled={}, tracking={}, scan_ready={}, scan_failed={}, visual_candidates={}, last_correction={}px",
+                state.settings.magnetic_cursor.enabled,
+                diagnostics.tracking,
+                diagnostics.scanner_ready,
+                diagnostics.scanner_failed,
+                diagnostics.visual_candidates,
+                diagnostics.correction_px,
+            );
+            #[cfg(target_os = "windows")]
+            if let Some(preview) = gamepad_desktop::magnetic_cursor::visual_preview() {
+                let id = egui::Id::unique("magnetic-preview");
+                let generation = std::sync::Arc::as_ptr(&preview) as usize;
+                let cached = ui.ctx().data(|data| data.get_temp::<(usize, egui::TextureHandle)>(id));
+                let texture = if let Some((_, texture)) = cached.filter(|(key, _)| *key == generation) {
+                    texture
+                } else {
+                    let rgba: Vec<u8> = preview.pixels.chunks_exact(4).flat_map(|p| [p[2], p[1], p[0], 255]).collect();
+                    let image = egui::ColorImage::from_rgba_unmultiplied([preview.width, preview.height], &rgba);
+                    let texture = ui.ctx().load_texture("magnetic-preview", image, egui::TextureOptions::NEAREST);
+                    ui.ctx().data_mut(|data| data.insert_temp(id, (generation, texture.clone())));
+                    texture
+                };
+                ui.add(egui::Image::new(&texture).max_width(ui.available_width().min(480.0)));
+            }
+            if ui.button(locale.text(Text::MagneticCopyDiagnostics)).clicked() {
+                ui.ctx().copy_text(report);
+            }
+        });
+        if changed {
+            desktop
+                .lock()
+                .expect("desktop runtime lock")
+                .configure(state.settings);
+        }
     });
     content_card(ui, |ui| show_control_settings(ui, state, desktop));
     ui.add_space(10.0);
@@ -209,18 +334,6 @@ fn show_control_settings(ui: &mut egui::Ui, state: &mut RuntimeState, desktop: &
                         egui::Slider::new(&mut state.settings.deadzone, 0.05..=0.5)
                             .text(locale.text(Text::Deadzone)),
                     )
-                    .changed();
-                changed |= ui
-                    .add(
-                        egui::Slider::new(
-                            &mut state.settings.precision_speed_percent,
-                            MIN_PRECISION_SPEED_PERCENT..=MAX_PRECISION_SPEED_PERCENT,
-                        )
-                        .text(locale.text(Text::PrecisionSpeed))
-                        .suffix("%")
-                        .step_by(5.0),
-                    )
-                    .on_hover_text(locale.text(Text::PrecisionSpeedHelp))
                     .changed();
             });
             if changed {

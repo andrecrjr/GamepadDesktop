@@ -25,7 +25,7 @@ A navegação comum usa ponteiro e atalhos. O app não enumera elementos acessí
 
 ## Modos e recuperação
 
-- **Desktop:** analógicos e botões controlam mouse e teclado; LT / L2 aplica a velocidade de precisão configurável (5–50%, padrão 25%); LT / L2 + R3 amplia o cursor por um segundo quando o sistema permite; Start + Select pausa ou retoma.
+- **Desktop:** analógicos e botões controlam mouse e teclado; Start + Select pausa ou retoma.
 - **Jogo:** a entrada comum fica com o jogo. Select + R3 abre o teclado sem transformar o restante dos comandos em mouse.
 - **Troca de modo:** dois toques rápidos em Select / View alternam Desktop e Jogo.
 - **Teclado aberto:** R3 solicita o fechamento nos dois modos.
@@ -71,7 +71,7 @@ O painel informa conexão, modo, pausa, falhas e versão. A bandeja permite reco
 
 As preferências ficam em `gamepad-navigator/preferences.json` e `gamepad-navigator/keyboard.json`, sob `$XDG_CONFIG_HOME` ou `~/.config` no Linux e `%APPDATA%` no Windows. O nome dessa pasta preserva a compatibilidade com versões anteriores.
 
-A interface inicia em 100%. Sem uma preferência de escala do cursor, o app não envia uma configuração de tamanho e mantém o valor do sistema. Uma escala maior só é aplicada após ajuste explícito; preferências antigas com o padrão de 135% são normalizadas.
+A interface inicia em 125%. O cursor inicia em 100% do tamanho encontrado no sistema e só é alterado quando a preferência de escala exige. A personalização do cursor é persistida após uma alteração explícita; preferências antigas com o padrão de 135% são normalizadas.
 
 Encerrar solicita a parada do worker de entrada e aguarda sua conclusão. Esse caminho inclui limpeza das entradas, teclado, gravações em andamento e restauração dos cursores. A UI pode mostrar **Finalizando a limpeza antes de fechar…** enquanto espera. A restauração do cursor é repetida em caso de erro; falhas persistentes mantêm o processo aguardando.
 

@@ -546,12 +546,6 @@ fn show_controller_guide(ui: &mut egui::Ui, state: &RuntimeState) {
                 ui.small(locale.text(Text::DesktopCommandsHelp));
                 ui.strong(locale.text(Text::PointerCommands));
                 shortcut_guide(ui, locale, &MOUSE_SHORTCUTS[2..6]);
-                shortcut_guide(ui, locale, &MOUSE_SHORTCUTS[16..17]);
-                if state.cursor_scale_range.supported
-                    && state.cursor_scale.percent() < state.cursor_scale_range.max_percent
-                {
-                    shortcut_guide(ui, locale, &MOUSE_SHORTCUTS[17..18]);
-                }
                 ui.add_space(10.0);
                 ui.strong(locale.text(Text::NavigationCommands));
                 shortcut_guide(ui, locale, &MOUSE_SHORTCUTS[6..11]);

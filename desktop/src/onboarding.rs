@@ -90,7 +90,6 @@ pub struct Onboarding {
     pub complete: bool,
     pub demonstrating: bool,
     pub cursor: [f32; 2],
-    pub pointer_locator_remaining: f32,
     pub scroll: f32,
     pub mouse_held: bool,
     pub item_position: [f32; 2],
@@ -117,7 +116,6 @@ impl Default for Onboarding {
             complete: false,
             demonstrating: false,
             cursor: [0.3, 0.5],
-            pointer_locator_remaining: 0.0,
             scroll: 0.0,
             mouse_held: false,
             item_position: [0.3, 0.5],
@@ -237,7 +235,6 @@ impl Onboarding {
         let locale = self.controller.keyboard.locale;
         self.controller = MouseController::default();
         self.controller.set_system_keyboard_uses_gamepad(true);
-        self.controller.set_pointer_locator_supported(true);
         self.controller.keyboard.locale = locale;
         self.controller.keyboard.open = matches!(self.step, Step::Type | Step::CloseKeyboard);
         self.controller.keyboard.selected_row = 2;
@@ -251,7 +248,6 @@ impl Onboarding {
             ..ControlSettings::default()
         };
         self.complete = false;
-        self.pointer_locator_remaining = 0.0;
         self.cursor = if matches!(self.step, Step::Click | Step::RightClick) {
             [0.72, 0.5]
         } else {
@@ -389,8 +385,6 @@ impl Onboarding {
     }
 
     fn practice(&mut self, frame: &GamepadFrame, elapsed: Duration) {
-        self.pointer_locator_remaining =
-            (self.pointer_locator_remaining - elapsed.as_secs_f32()).max(0.0);
         let selection = (
             self.controller.keyboard.selected_row,
             self.controller.keyboard.selected_column,
@@ -439,9 +433,6 @@ impl Onboarding {
                         self.complete |= self.mouse_held && near(position, [0.72, 0.5]);
                         self.mouse_held = false;
                     }
-                }
-                Action::LocatePointer if self.step == Step::Pointer => {
-                    self.pointer_locator_remaining = 1.0;
                 }
                 Action::Scroll(amount) if self.step == Step::Scroll => {
                     self.scroll = (self.scroll + amount as f32 * 0.12).clamp(-1.0, 1.0);

@@ -21,8 +21,6 @@ const CHAPTERS: [Text; 5] = [
 pub fn show(ui: &mut egui::Ui, state: &RuntimeState) -> Option<Command> {
     let tour = state.onboarding.as_ref()?;
     let locale = state.locale;
-    let pointer_locator_available = state.cursor_scale_range.supported
-        && state.cursor_scale.percent() < state.cursor_scale_range.max_percent;
     auto_family(ui.ctx(), state.controller_type);
     let mut command = None;
     egui::Panel::bottom("welcome-navigation")
@@ -139,7 +137,7 @@ pub fn show(ui: &mut egui::Ui, state: &RuntimeState) -> Option<Command> {
                     .corner_radius(16)
                     .inner_margin(14)
                     .show(ui, |ui| {
-                        let (title, copy) = lesson_copy(tour.step, pointer_locator_available);
+                        let (title, copy) = lesson_copy(tour.step);
                         ui.label(RichText::new(locale.text(title)).strong().size(32.0));
                         ui.add_space(6.0);
                         ui.label(
@@ -224,7 +222,7 @@ pub fn show(ui: &mut egui::Ui, state: &RuntimeState) -> Option<Command> {
                                 scene(ui, tour, locale);
                             }
                             ui.add_space(10.0);
-                            shortcut(ui, tour.step, locale, pointer_locator_available);
+                            shortcut(ui, tour.step, locale);
                             ui.add_space(8.0);
                             ui.label(
                                 RichText::new(locale.text(Text::TourSandbox)).color(MUTED_TEXT),
@@ -398,13 +396,10 @@ fn auto_family(context: &egui::Context, gamepad_type: Option<GamepadType>) {
     });
 }
 
-fn lesson_copy(step: Step, pointer_locator_available: bool) -> (Text, Text) {
+fn lesson_copy(step: Step) -> (Text, Text) {
     match step {
         Step::Welcome => (Text::TourWelcome, Text::TourWelcomeCopy),
         Step::Modes => (Text::TourModes, Text::TourModesCopy),
-        Step::Pointer if pointer_locator_available => {
-            (Text::TourPointer, Text::TourPointerLocatorCopy)
-        }
         Step::Pointer => (Text::TourPointer, Text::TourPointerCopy),
         Step::Click => (Text::TourClick, Text::TourClickCopy),
         Step::RightClick => (Text::TourRightClick, Text::TourRightClickCopy),
@@ -425,10 +420,9 @@ fn lesson_copy(step: Step, pointer_locator_available: bool) -> (Text, Text) {
     }
 }
 
-fn shortcut(ui: &mut egui::Ui, step: Step, locale: Locale, pointer_locator_available: bool) {
+fn shortcut(ui: &mut egui::Ui, step: Step, locale: Locale) {
     let indices: &[usize] = match step {
-        Step::Pointer if pointer_locator_available => &[2, 16, 17],
-        Step::Pointer => &[2, 16],
+        Step::Pointer => &[2],
         Step::Click => &[4],
         Step::RightClick => &[5],
         Step::Drag => &[4, 2],
@@ -678,13 +672,6 @@ fn scene(ui: &mut egui::Ui, tour: &Onboarding, locale: Locale) {
                 TEXT,
                 Stroke::new(1.0, PAGE_BACKGROUND),
             ));
-            if tour.pointer_locator_remaining > 0.0 {
-                painter.circle_stroke(
-                    cursor + Vec2::new(9.0, 10.0),
-                    22.0,
-                    Stroke::new(2.5, ACCENT),
-                );
-            }
         }
         Step::Scroll => {
             let clipped = painter.with_clip_rect(content);

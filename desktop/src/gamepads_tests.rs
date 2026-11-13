@@ -1,28 +1,6 @@
 use super::*;
 use sdl3::joystick::{JoystickType, VirtualJoystickConnection, VirtualJoystickDescription};
 
-#[test]
-#[ignore = "initializes SDL; run serially"]
-fn active_identity_follows_selection_and_clears_on_disconnect() {
-    let mut reader = Gamepads::new().unwrap();
-    assert!(reader.active_identity().is_none());
-    let first = connect(&reader, "First controller", true);
-    let second = connect(&reader, "Second controller", true);
-    reader.poll(Some(first.id().raw())).unwrap();
-    assert_eq!(
-        reader.active_identity().unwrap().sdl_instance_id,
-        first.id().raw()
-    );
-    reader.poll(Some(second.id().raw())).unwrap();
-    reader.poll(Some(second.id().raw())).unwrap();
-    assert_eq!(
-        reader.active_identity().unwrap().sdl_instance_id,
-        second.id().raw()
-    );
-    drop(second);
-    assert!(reader.active_identity().is_none());
-}
-
 fn connect(reader: &Gamepads, name: &str, mapped: bool) -> VirtualJoystickConnection {
     reader
         .joysticks

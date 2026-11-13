@@ -54,8 +54,6 @@ Right-clicking, dragging, switching windows, screenshots, and pausing are availa
 | Controller input             | Action                                                    |
 | ---------------------------- | --------------------------------------------------------- |
 | Left stick                   | Move the pointer                                          |
-| LT / L2 held                 | Slow pointer movement; set precision speed from 5–50% (default: 25%) |
-| LT / L2 + R3                 | Enlarge the system pointer for one second, where supported |
 | Right stick, up/down         | Scroll the page                                           |
 | A / ✕ — bottom button        | Click; hold to drag                                       |
 | B / ○ — right button         | Right-click                                               |
@@ -81,7 +79,7 @@ The app uses SDL3 profiles to recognize different controller families. Controlle
 - **COSMIC/Wayland:** integrates with the desktop keyboard when its service is available.
 - **Other Wayland sessions:** the app's keyboard depends on compositor support. It is unavailable on GNOME Wayland.
 
-Physical validation for the current scope is complete. The [roadmap](desktop/docs/roadmap.md) now tracks planned features and bug fixes. See the [compatibility guide](desktop/README.md#compatibility-and-limitations) for environment details.
+The project is in development. Physical controller, app, and environment validation is tracked in the [roadmap](desktop/docs/roadmap.md). See the [compatibility guide](desktop/README.md#compatibility-and-limitations) for details.
 
 ## Learn more
 

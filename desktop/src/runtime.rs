@@ -23,7 +23,6 @@ use crate::{
 
 const ACTIVE_POLL_INTERVAL: Duration = Duration::from_millis(8);
 const IDLE_POLL_INTERVAL: Duration = Duration::from_millis(16);
-const POINTER_LOCATOR_DURATION: Duration = Duration::from_secs(1);
 
 // A blocked native controller call cannot observe the runtime's stop flag.
 #[cfg(any(target_os = "windows", test))]
@@ -55,6 +54,7 @@ pub struct RuntimeState {
     pub cursor_scale_range: CursorScaleRange,
     pub cursor_scale_error: Option<String>,
     pub settings: ControlSettings,
+    pub magnetic_cursor_diagnostics: crate::magnetic_cursor::MagneticCursorDiagnostics,
     pub start_on_login: bool,
     pub controller: Option<String>,
     pub controller_type: Option<GamepadType>,
@@ -295,7 +295,6 @@ impl DesktopRuntime {
         DesktopPreferences {
             locale: state.locale,
             ui_scale: state.ui_scale,
-            ui_scale_customized: (state.ui_scale != UiScale::Standard).then_some(true),
             cursor_scale: state.cursor_scale,
             cursor_scale_customized: state.cursor_scale_customized,
             controls: state.settings,
@@ -389,7 +388,6 @@ impl PreferencePersistence {
             DesktopPreferences {
                 locale: state.locale,
                 ui_scale: state.ui_scale,
-                ui_scale_customized: (state.ui_scale != UiScale::Standard).then_some(true),
                 cursor_scale: state.cursor_scale,
                 cursor_scale_customized: state.cursor_scale_customized,
                 controls: state.settings,
@@ -435,13 +433,11 @@ fn run(
     controller.keyboard.locale = state.lock().expect("runtime state lock").locale;
     let mut saved_settings = controller.keyboard.settings;
     controller.set_system_keyboard_uses_gamepad(platform.system_keyboard_uses_gamepad());
-    controller.set_pointer_locator_supported(false);
     controller.keyboard.presentation = platform.keyboard_presentation();
     controller.keyboard.status = platform.keyboard_overlay_error().map(str::to_owned);
     state.lock().expect("runtime state lock").keyboard = controller.keyboard.clone();
     let mut preference_persistence = PreferencePersistence::load();
     let mut last_tick = Instant::now();
-    let mut pointer_locator_until = None;
     let outcome = (|| {
         while !stop.load(Ordering::Relaxed) {
             let now = Instant::now();
@@ -463,12 +459,6 @@ fn run(
             } else {
                 gamepads.poll(selected)?
             };
-            let locator_supported = {
-                let state = state.lock().expect("runtime state lock");
-                state.cursor_scale_range.supported
-                    && state.cursor_scale.percent() < state.cursor_scale_range.max_percent
-            };
-            controller.set_pointer_locator_supported(locator_supported);
             let (actions, notifications) = update_input(
                 state,
                 &mut controller,
@@ -486,7 +476,6 @@ fn run(
                 state,
                 &mut applied_cursor_scale,
                 frame.is_some(),
-                &mut pointer_locator_until,
             )?;
             for action in actions {
                 apply_action(
@@ -495,7 +484,6 @@ fn run(
                     &mut platform,
                     state,
                     notification_service,
-                    &mut pointer_locator_until,
                 )?;
             }
             preference_persistence.save_after_quiet_period(state, now);
@@ -572,46 +560,12 @@ fn sync_platform_controls(
     state: &Mutex<RuntimeState>,
     applied_cursor_scale: &mut Option<CursorScale>,
     connected: bool,
-    pointer_locator_until: &mut Option<Instant>,
 ) -> Result<(), String> {
-    let (base_cursor_scale, cursor_scale_customized, cursor_scale_range) = {
-        let state = state.lock().expect("runtime state lock");
-        (
-            state.cursor_scale,
-            state.cursor_scale_customized == Some(true),
-            state.cursor_scale_range,
-        )
-    };
-    let now = Instant::now();
-    let locator_active = pointer_locator_until.is_some_and(|until| now < until);
-    if !locator_active {
-        *pointer_locator_until = None;
-    }
-    let cursor_scale = if locator_active && cursor_scale_range.supported {
-        Some(CursorScale::new(
-            base_cursor_scale
-                .percent()
-                .saturating_mul(2)
-                .min(cursor_scale_range.max_percent),
-        ))
-    } else if cursor_scale_customized {
-        Some(base_cursor_scale)
-    } else {
-        None
-    };
-    if let Some(cursor_scale) = cursor_scale {
-        if *applied_cursor_scale != Some(cursor_scale) {
-            *applied_cursor_scale = Some(cursor_scale);
-            let error = platform.set_cursor_scale(cursor_scale).err();
-            state.lock().expect("runtime state lock").cursor_scale_error = error;
-        }
-    } else if applied_cursor_scale.is_some() {
-        let result = platform.set_cursor_scale(base_cursor_scale);
-        let restored = result.is_ok();
-        state.lock().expect("runtime state lock").cursor_scale_error = result.err();
-        if restored {
-            *applied_cursor_scale = None;
-        }
+    let cursor_scale = state.lock().expect("runtime state lock").cursor_scale;
+    if *applied_cursor_scale != Some(cursor_scale) {
+        *applied_cursor_scale = Some(cursor_scale);
+        let error = platform.set_cursor_scale(cursor_scale).err();
+        state.lock().expect("runtime state lock").cursor_scale_error = error;
     }
     let (input_enabled, native_connected) = state
         .lock()
@@ -619,6 +573,22 @@ fn sync_platform_controls(
         .native_mouse_state(connected);
     platform.update_mouse_mode(input_enabled, native_connected)?;
     platform.update_native_dpad_target();
+    #[cfg(target_os = "windows")]
+    {
+        let (settings, active) = {
+            let state = state.lock().expect("runtime state lock");
+            (
+                state.settings.magnetic_cursor,
+                input_enabled && native_connected && !state.keyboard.open,
+            )
+        };
+        platform.magnetic_cursor.configure(settings, active);
+        let diagnostics = platform.magnetic_cursor.diagnostics();
+        let mut state = state.lock().expect("runtime state lock");
+        if state.magnetic_cursor_diagnostics != diagnostics {
+            state.magnetic_cursor_diagnostics = diagnostics;
+        }
+    }
     Ok(())
 }
 
@@ -628,12 +598,7 @@ fn apply_action(
     platform: &mut Platform,
     state: &Mutex<RuntimeState>,
     notification_service: &NotificationService,
-    pointer_locator_until: &mut Option<Instant>,
 ) -> Result<(), String> {
-    if action == Action::LocatePointer {
-        *pointer_locator_until = Some(Instant::now() + POINTER_LOCATOR_DURATION);
-        return Ok(());
-    }
     let Action::OnScreenKeyboard(open) = action else {
         return platform.apply(action);
     };
