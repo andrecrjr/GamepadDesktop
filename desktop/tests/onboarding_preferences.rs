@@ -36,9 +36,9 @@ fn completion_is_remembered_after_reloading_preferences() {
 }
 
 #[test]
-fn interface_scale_defaults_larger_and_survives_preferences_roundtrip() {
+fn interface_scale_defaults_to_standard_and_survives_preferences_roundtrip() {
     let defaults = serde_json::to_value(DesktopPreferences::default()).unwrap();
-    assert_eq!(defaults["ui_scale"], "comfortable");
+    assert_eq!(defaults["ui_scale"], "standard");
     for scale in ["standard", "comfortable", "large", "extra_large"] {
         let preferences: DesktopPreferences =
             serde_json::from_value(serde_json::json!({"ui_scale": scale})).unwrap();
@@ -54,7 +54,7 @@ fn interface_scale_steps_are_bounded() {
     use gamepad_desktop::preferences::UiScale;
     assert_eq!(UiScale::Standard.step(false), UiScale::Standard);
     assert_eq!(UiScale::ExtraLarge.step(true), UiScale::ExtraLarge);
-    assert_eq!(UiScale::default().factor(), 1.25);
+    assert_eq!(UiScale::default().factor(), 1.0);
     for pair in UiScale::ALL.windows(2) {
         assert_eq!(pair[0].step(true), pair[1]);
         assert_eq!(pair[1].step(false), pair[0]);

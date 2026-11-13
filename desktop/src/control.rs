@@ -6,6 +6,9 @@ const REPEAT_INITIAL_DELAY: f64 = 0.4;
 const DIRECTION_REPEAT_INTERVAL: f64 = 0.08;
 const SELECT_DOUBLE_TAP_WINDOW: Duration = Duration::from_millis(400);
 const NEXT_WINDOW_PRESS_GUARD: Duration = Duration::from_millis(32);
+pub const MIN_PRECISION_SPEED_PERCENT: u8 = 5;
+pub const MAX_PRECISION_SPEED_PERCENT: u8 = 50;
+const DEFAULT_PRECISION_SPEED_PERCENT: u8 = 25;
 
 pub const MOUSE_SHORTCUTS: &[(&str, &str)] = &[
     (
@@ -56,6 +59,14 @@ pub const MOUSE_SHORTCUTS: &[(&str, &str)] = &[
     ("Select/Back + R3 · modo Jogo", "Abrir / fechar teclado"),
     ("Start/Menu + LB/L1", "Print Screen · iniciar captura"),
     ("Start/Menu + RB/R1", "F11 · tela cheia"),
+    (
+        "LT / L2",
+        "Segurar para desacelerar o ponteiro · ajuste nas configurações",
+    ),
+    (
+        "LT / L2 + R3",
+        "Aumentar o ponteiro por um instante para localizá-lo",
+    ),
 ];
 
 pub const KEYBOARD_SHORTCUTS: &[(&str, &str)] = &[
@@ -93,6 +104,7 @@ pub enum Button {
     Start,
     LeftStick,
     Select,
+    Precision,
 }
 
 #[derive(Clone, Copy, Debug, Default)]
@@ -100,7 +112,7 @@ pub struct GamepadFrame {
     pub x: f64,
     pub y: f64,
     pub scroll: f64,
-    pub buttons: [bool; 14],
+    pub buttons: [bool; 15],
 }
 
 impl GamepadFrame {
@@ -133,7 +145,7 @@ pub struct ControlSettings {
     pub mode: ControlMode,
     pub speed: f64,
     pub deadzone: f64,
-    pub magnetic_cursor: crate::magnetic_cursor::MagneticCursorSettings,
+    pub precision_speed_percent: u8,
 }
 
 impl Default for ControlSettings {
@@ -143,16 +155,18 @@ impl Default for ControlSettings {
             mode: ControlMode::Desktop,
             speed: 1800.0,
             deadzone: 0.2,
-            magnetic_cursor: Default::default(),
+            precision_speed_percent: DEFAULT_PRECISION_SPEED_PERCENT,
         }
     }
 }
 
 impl ControlSettings {
     pub fn normalized(mut self) -> Self {
-        self.magnetic_cursor = self.magnetic_cursor.normalized();
         self.speed = self.speed.clamp(100.0, 2400.0);
         self.deadzone = self.deadzone.clamp(0.05, 0.5);
+        self.precision_speed_percent = self
+            .precision_speed_percent
+            .clamp(MIN_PRECISION_SPEED_PERCENT, MAX_PRECISION_SPEED_PERCENT);
         self
     }
 }
@@ -208,6 +222,7 @@ pub enum Action {
     KeyboardChord(KeyboardInput, KeyboardModifiers),
     NextWindow,
     OnScreenKeyboard(bool),
+    LocatePointer,
 }
 
 #[derive(Clone)]
@@ -221,6 +236,7 @@ pub struct MouseController {
     remainder: [f64; 3],
     repeat: [f64; 4],
     system_keyboard_uses_gamepad: bool,
+    pointer_locator_supported: bool,
     select_tap_remaining: Option<Duration>,
     next_window_press_guard: Duration,
     mode: ControlMode,
@@ -238,6 +254,7 @@ impl Default for MouseController {
             remainder: [0.0; 3],
             repeat: [0.0; 4],
             system_keyboard_uses_gamepad: false,
+            pointer_locator_supported: false,
             select_tap_remaining: None,
             next_window_press_guard: Duration::ZERO,
             mode: ControlMode::Desktop,
@@ -252,6 +269,10 @@ impl MouseController {
 
     pub fn set_system_keyboard_uses_gamepad(&mut self, enabled: bool) {
         self.system_keyboard_uses_gamepad = enabled;
+    }
+
+    pub fn set_pointer_locator_supported(&mut self, supported: bool) {
+        self.pointer_locator_supported = supported;
     }
 
     pub fn update(
@@ -317,8 +338,17 @@ impl MouseController {
             }
             self.select_tap_remaining = Some(SELECT_DOUBLE_TAP_WINDOW);
         }
-        let keyboard_toggled =
-            frame.pressed(Button::RightStick) && !self.previous.pressed(Button::RightStick);
+        let pointer_locator_requested = self.pointer_locator_supported
+            && settings.enabled
+            && self.armed
+            && settings.mode == ControlMode::Desktop
+            && !self.keyboard.open
+            && frame.pressed(Button::Precision)
+            && frame.pressed(Button::RightStick)
+            && !self.previous.pressed(Button::RightStick);
+        let keyboard_toggled = frame.pressed(Button::RightStick)
+            && !self.previous.pressed(Button::RightStick)
+            && !pointer_locator_requested;
         let keyboard_toggle_requested = keyboard_chord
             || (keyboard_toggled && (settings.mode == ControlMode::Desktop || self.keyboard.open));
         if keyboard_toggle_requested && self.keyboard.open {
@@ -363,6 +393,9 @@ impl MouseController {
             return actions;
         }
 
+        if pointer_locator_requested {
+            actions.push(Action::LocatePointer);
+        }
         self.update_desktop_controls(frame, elapsed, settings, &mut actions);
         self.previous = *frame;
         actions
@@ -548,7 +581,12 @@ impl MouseController {
         let deflection = x.hypot(y);
         let magnitude = deflection.max(1.0);
         // Add precision near neutral while preserving full-deflection speed.
-        let speed = settings.speed.clamp(100.0, 2400.0) * deflection.min(1.0).sqrt();
+        let precision = if frame.pressed(Button::Precision) {
+            f64::from(settings.precision_speed_percent) / 100.0
+        } else {
+            1.0
+        };
+        let speed = settings.speed.clamp(100.0, 2400.0) * precision * deflection.min(1.0).sqrt();
         let dx = accumulate(&mut self.remainder[0], x / magnitude * speed * seconds);
         let dy = accumulate(&mut self.remainder[1], y / magnitude * speed * seconds);
         if dx != 0 || dy != 0 {

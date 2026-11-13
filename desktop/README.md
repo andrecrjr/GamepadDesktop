@@ -14,6 +14,8 @@ Download the files from the [latest release](https://github.com/andrecrjr/Gamepa
 
 The tray menu lets you open or hide the panel and quit the app. On first launch, the app creates a per-user Start menu shortcut to identify its notifications.
 
+If controller input freezes, choose **Quit** and reopen the app. Windows shutdown allows five seconds for normal cleanup. If the worker stays stuck, a separate thread restores the original cursor size and visibility before forcing the process to exit. Windows API failures can still prevent restoration, and recent settings may be unsaved; this fallback does not repair the underlying controller connection.
+
 ### Linux
 
 On Debian, Ubuntu, and derivatives, x64, install `GamepadDesktop-Linux-x64.deb` through your software center or terminal:
@@ -57,6 +59,8 @@ The symbols below use Xbox / PlayStation names. On Switch, follow the indicated 
 | Controller input             | Action in Desktop mode                        |
 | ---------------------------- | --------------------------------------------- |
 | Left stick                   | Move the pointer                              |
+| LT / L2 held                 | Slow pointer movement; precision speed is adjustable from 5–50% (default: 25%) |
+| LT / L2 + R3                 | Enlarge the system pointer for one second, where supported |
 | Right stick, up/down         | Scroll the page                               |
 | A / ✕ — bottom               | Left-click; hold to drag                      |
 | B / ○ — right                | Right-click                                   |
@@ -75,25 +79,7 @@ In **Game** mode, use **Select / View + R3** to open the keyboard. While it is o
 
 The D-pad sends arrow keys to the active app on Linux. On Windows, it navigates the open keyboard and does not send regular arrow keys during desktop control.
 
-Pointer movement uses a progressive response curve: light stick input gives finer control, while full deflection reaches the configured speed. Releasing the stick stops movement immediately. This applies with magnetic assistance on or off; scrolling and keyboard navigation keep their own response.
-
-## Magnetic cursor · BETA · Experimental
-
-On Windows, enable **Settings → Magnetic cursor · BETA · Experimental** to gently steer controller movement toward visible, button-like rectangles near the cursor. A local screen scan runs at up to five times per second over a small cursor-centered region. Smaller candidates get extra reach. It is off by default. Physical mouse movement, dragging, pause, Game mode, onboarding, and the on-screen keyboard do not use this assistance.
-
-- **Attraction** adjusts the pull toward a target's center.
-- **Center hold** resists gentle stick movement and brief accidental flicks at the center. A moderate push held in the same direction releases after 80 ms at 50%; a strong push releases immediately. Higher values increase the release delay. Set it to 0% to disable holding.
-- **Detection sensitivity** adjusts edge contrast requirements. Higher values accept fainter edges and may include more false targets.
-
-All three default to 50%, preserving the original behavior. Existing preferences retain their attraction and inherit that same value for center hold. **Restore magnetic defaults** resets the three controls without turning the feature on or off. Nearby detected icons inside rectangles can be selected independently; elsewhere, the outer rectangle remains a target.
-
-The current target is favored over similarly close candidates to reduce switching caused by small stick or detection variations. A clearly better candidate can still take over. Moving away, losing the target, changing windows, or disabling assistance clears the selection.
-
-Small rectangular targets are checked at native screen resolution before the broader, downscaled scan. This preserves thin borders and center coordinates, including small rectangles inside larger controls. The native pass accepts shapes from 4 to 40 pixels per side, checks contrast along all four edges, and uses the detection sensitivity setting. Open edges and isolated dots are rejected.
-
-This experimental feature uses local image processing without AI or accessibility APIs. It may miss flat buttons or mistake cards, fields, and borders for buttons. Captured pixels are processed in memory and never saved. Windows behavior still needs validation with a physical controller.
-
-Expand **Diagnostics** in the same settings section to see how many visual candidates were found and the pixel adjustment from the last stick movement. Copy the report when troubleshooting.
+Pointer movement uses a progressive response curve: light stick input gives finer control, while full deflection reaches the configured speed. Hold **LT / L2** to use the precision speed from **Settings → Controls and adjustments**; it ranges from 5% to 50% and starts at 25%. Release the trigger to return to normal speed. Press **LT / L2 + R3** to enlarge the system pointer for one second and make it easier to find. This locator is available on Windows and supported GNOME or Plasma sessions; the control guide shows it only when the current cursor size can be increased.
 
 ## On-screen keyboard
 
@@ -121,11 +107,11 @@ Customize width, position, opacity, and repeat behavior in the settings. The dis
 
 ## Comfort and preferences
 
-The interface starts at 125%. Use **Interface size** at the top of the tour, or the app settings, to choose from 100% to 175%.
+The interface starts at its normal 100% size. Use **Interface size** at the top of the tour, or the app settings, to choose from 100% to 175%.
 
-Cursor scaling starts at 100% of the size found on your system. The app applies a different size only when the preference requires it and saves customization when you adjust it. On exit, it restores the original size if it changed it.
+Without a cursor size preference, the app leaves the system cursor unchanged. The scale is relative to its detected size: 100% keeps that size, and larger values apply after you choose them in settings. On exit, the app restores the original size if it changed it.
 
-The panel lets you adjust pointer speed, deadzone, and the selected controller. Controllers without a profile can receive an SDL mapping line, saved for future sessions. The option to start with your session is available in settings.
+The panel lets you adjust pointer speed, precision speed, deadzone, and the selected controller. Controllers without a profile can receive an SDL mapping line, saved for future sessions. The option to start with your session is available in settings.
 
 ## Updating and quitting
 
@@ -139,7 +125,8 @@ Hiding the panel keeps controller input active when the tray is available. To ex
 
 ## Compatibility and limitations
 
-- The project provides Windows and Linux x64 builds; the physical controller and app compatibility matrix is still being validated.
+- The project provides Windows and Linux x64 builds. Physical validation for the current scope is complete; see the roadmap for planned features and bug fixes.
+- System pointer scaling and the locator shortcut are available on Windows and supported GNOME or Plasma sessions. Other Linux desktop sessions may not expose a supported cursor sizing interface.
 - Command support depends on the active app. Desktop navigation uses the pointer and shortcuts, without promising accessible-element navigation in every app.
 - On Windows, apps running with higher privileges may reject input. The virtual-key filter does not block games that read the controller directly.
 - The app's Wayland keyboard requires `wlr-layer-shell`; it is unavailable on GNOME Wayland.
@@ -152,5 +139,5 @@ When [reporting an issue](https://github.com/andrecrjr/GamepadDesktop/issues), i
 
 - [How it works and platform differences](docs/system-overview.md)
 - [Development, builds, and assets](docs/development.md)
-- [Roadmap and pending validation](docs/roadmap.md)
+- [Roadmap](docs/roadmap.md)
 - [Keyboard research and history](docs/keyboard-research.md)

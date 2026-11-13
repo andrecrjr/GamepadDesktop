@@ -11,8 +11,8 @@ use crate::{
 #[serde(rename_all = "snake_case")]
 #[repr(u16)]
 pub enum UiScale {
-    Standard = 100,
     #[default]
+    Standard = 100,
     Comfortable = 125,
     Large = 150,
     ExtraLarge = 175,
@@ -34,7 +34,7 @@ impl UiScale {
         let index = Self::ALL
             .iter()
             .position(|scale| *scale == self)
-            .unwrap_or(1);
+            .unwrap_or(0);
         Self::ALL[if increase {
             (index + 1).min(3)
         } else {
@@ -48,6 +48,8 @@ impl UiScale {
 pub struct DesktopPreferences {
     pub locale: Locale,
     pub ui_scale: UiScale,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub ui_scale_customized: Option<bool>,
     #[serde(skip_serializing_if = "is_default_cursor_scale")]
     pub cursor_scale: CursorScale,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -66,6 +68,7 @@ impl Default for DesktopPreferences {
         Self {
             locale: Locale::detect(),
             ui_scale: UiScale::default(),
+            ui_scale_customized: None,
             cursor_scale: CursorScale::default(),
             cursor_scale_customized: None,
             controls: ControlSettings::default(),
@@ -98,6 +101,14 @@ impl DesktopPreferences {
     }
 
     fn normalized(mut self) -> Self {
+        match self.ui_scale_customized {
+            Some(true) => {}
+            Some(false) => self.ui_scale = UiScale::default(),
+            None if self.ui_scale == UiScale::Comfortable => {
+                self.ui_scale = UiScale::default();
+            }
+            None => {}
+        }
         match self.cursor_scale_customized {
             Some(true) => {}
             Some(false) => self.cursor_scale = CursorScale::default(),

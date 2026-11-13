@@ -31,6 +31,12 @@ impl Locale {
             "R3 · pressionar analógico direito" => Some(Text::RightStickPress),
             "L3 · pressionar analógico esquerdo" => Some(Text::LeftStickPress),
             "Analógico esquerdo" => Some(Text::LeftStick),
+            "Segurar para desacelerar o ponteiro · ajuste nas configurações" => {
+                Some(Text::PrecisionPointer)
+            }
+            "Aumentar o ponteiro por um instante para localizá-lo" => {
+                Some(Text::LocatePointerShortcut)
+            }
             "Analógico direito ↕" => Some(Text::RightStickVertical),
             "Inferior · A / ✕ / B no Switch" => Some(Text::SouthButton),
             "Direito · B / ○ / A no Switch" => Some(Text::EastButton),
@@ -190,7 +196,8 @@ catalog! {
     TourDesktopCard => ("Move the pointer, click, scroll and type with your controller.", "Mueve el puntero, haz clic, desplázate y escribe con el mando.", "Mova o ponteiro, clique, role e digite com o controle.");
     TourGameCard => ("Your game keeps its own controls. Mouse and keyboard commands stop.", "Tu juego mantiene sus controles. Se detienen los comandos de ratón y teclado.", "O jogo mantém seus próprios comandos. Os comandos de mouse e teclado param.");
     TourPointer => ("Move the pointer", "Mueve el puntero", "Mova o ponteiro");
-    TourPointerCopy => ("Move the left stick to move the pointer.", "Mueve el stick izquierdo para mover el puntero.", "Mova o analógico esquerdo para mover o ponteiro.");
+    TourPointerCopy => ("Move the left stick to move the pointer. Hold LT / L2 to slow it down; adjust that speed in Settings.", "Mueve el stick izquierdo para mover el puntero. Mantén LT / L2 para ir más despacio; ajusta esa velocidad en Configuración.", "Mova o analógico esquerdo para mover o ponteiro. Segure LT / L2 para desacelerar e ajuste a velocidade nas Configurações.");
+    TourPointerLocatorCopy => ("Move the left stick. Hold LT / L2 to slow it; set the speed in Settings. Press LT / L2 + R3 to enlarge it for one second.", "Mueve el stick izquierdo. Mantén LT / L2 para reducir su velocidad; ajústala en Configuración. Pulsa LT / L2 + R3 para agrandarlo durante un segundo.", "Mova com o analógico esquerdo. Segure LT / L2 para desacelerar; ajuste a velocidade nas Configurações. Pressione LT / L2 + R3 para ampliar o ponteiro por um segundo.");
     TourClick => ("Left mouse button: select", "Botón izquierdo: seleccionar", "Botão esquerdo: selecionar");
     TourClickCopy => ("Move onto the target. Press A / ✕ to click.", "Mueve el puntero al objetivo. Pulsa A / ✕ para hacer clic.", "Mova o ponteiro até o alvo. Pressione A / ✕ para clicar.");
     TourRightClick => ("Right mouse button: more options", "Botón derecho: más opciones", "Botão direito: mais opções");
@@ -312,26 +319,6 @@ catalog! {
     PreferencesSaveFailedPrefix => ("Could not save preferences: ", "No se pudo guardar la configuración: ", "Não foi possível salvar as configurações: ");
     ControlsAndAdjustments => ("Controller and adjustments", "Mando y ajustes", "Controle e ajustes");
     CursorScale => ("System pointer size", "Tamaño del cursor del sistema", "Tamanho do cursor do sistema");
-    MagneticCursorBeta => ("Magnetic cursor · BETA · Experimental", "Cursor magnético · BETA · Experimental", "Cursor magnético · BETA · Experimental");
-    EnableMagneticCursor => ("Attract cursor to nearby buttons", "Atraer el cursor a botones cercanos", "Atrair cursor para botões próximos");
-    MagneticStrength => ("Attraction", "Atracción", "Atração");
-    MagneticCenterHold => ("Center hold", "Retención en el centro", "Fixação no centro");
-    MagneticCenterHoldHelp => ("Resists gentle stick movement at the center. 0% disables holding; push harder to leave.", "Resiste movimientos suaves en el centro. 0% desactiva la retención; empuja más para salir.", "Resiste a movimentos leves no centro. 0% desativa a fixação; empurre mais para sair.");
-    MagneticDetectionSensitivity => ("Detection sensitivity", "Sensibilidad de detección", "Sensibilidade de detecção");
-    MagneticDetectionHelp => ("Higher values detect fainter edges but may include more false targets. 50% keeps the original filter.", "Valores altos detectan bordes más tenues, pero pueden incluir falsos objetivos. 50% mantiene el filtro original.", "Valores altos detectam bordas mais sutis, mas podem incluir alvos falsos. 50% mantém o filtro original.");
-    MagneticResetDefaults => ("Restore magnetic defaults", "Restaurar valores magnéticos", "Restaurar padrões magnéticos");
-    MagneticCursorHelp => ("Small buttons get a wider pull area. Move away to release. Detects visible rectangular controls.", "Los botones pequeños tienen mayor alcance magnético. Aléjate para soltar. Detecta controles rectangulares visibles.", "Botões pequenos têm maior alcance magnético. Mova para longe para soltar. Detecta controles retangulares visíveis.");
-    MagneticCursorWindowsOnly => ("Available on Windows. Experimental and off by default.", "Disponible en Windows. Experimental y desactivado por defecto.", "Disponível no Windows. Experimental e desligado por padrão.");
-    MagneticDiagnostics => ("Diagnostics", "Diagnóstico", "Diagnóstico");
-    MagneticDebugDisabled => ("Magnetic cursor is turned off.", "El cursor magnético está desactivado.", "O cursor magnético está desligado.");
-    MagneticDebugWaiting => ("Waiting for an active controller in Desktop mode.", "Esperando un control conectado en modo Escritorio.", "Aguardando um controle conectado no modo Desktop.");
-    MagneticDebugStarting => ("Starting the local screen scan…", "Iniciando el análisis local de pantalla…", "Iniciando a análise local da tela…");
-    MagneticDebugUnavailable => ("Could not capture or analyze the screen region.", "No se pudo capturar o analizar la región de pantalla.", "Não foi possível capturar ou analisar a região da tela.");
-    MagneticDebugNoButtons => ("No button-like rectangles found near the cursor.", "No se encontraron rectángulos similares a botones cerca del cursor.", "Nenhum retângulo parecido com botão encontrado perto do cursor.");
-    MagneticDebugButtons => ("Visual button candidates near cursor: {count}.", "Candidatos visuales a botones cerca del cursor: {count}.", "Candidatos visuais a botões perto do cursor: {count}.");
-    MagneticDebugCorrection => ("Last cursor correction: {pixels} px.", "Última corrección del cursor: {pixels} px.", "Última correção do cursor: {pixels} px.");
-    MagneticDebugHint => ("A 0 px correction means no pull was applied to the last stick movement. This is a visual estimate; screen images are processed in memory and not saved.", "Una corrección de 0 px significa que el último movimiento no recibió atracción. Es una estimación visual; las imágenes se procesan en memoria y no se guardan.", "Uma correção de 0 px significa que o último movimento não recebeu atração. É uma estimativa visual; as imagens são processadas na memória e não são salvas.");
-    MagneticCopyDiagnostics => ("Copy diagnostics", "Copiar diagnóstico", "Copiar diagnóstico");
     CursorScaleHelp => ("From 100% (current size) to {max}%. The system cursor changes across apps while Gamepad Desktop is running.", "De 100% (tamaño actual) a {max}%. El cursor del sistema cambia en todas las aplicaciones mientras Gamepad Desktop está abierto.", "De 100% (tamanho atual) a {max}%. O cursor do sistema muda em todos os aplicativos enquanto o Gamepad Desktop estiver aberto.");
     CursorScaleUnavailable => ("System pointer sizing is unavailable in this desktop session.", "El ajuste del cursor del sistema no está disponible en esta sesión.", "O ajuste do cursor do sistema não está disponível nesta sessão.");
     CursorScaleErrorPrefix => ("Could not resize system pointer: ", "No se pudo cambiar el tamaño del cursor: ", "Não foi possível ajustar o cursor do sistema: ");
@@ -361,6 +348,8 @@ catalog! {
     RuntimeStoppedPrefix => ("Desktop control stopped: ", "El control del escritorio se detuvo: ", "O controle do desktop parou: ");
     Speed => ("Speed", "Velocidad", "Velocidade");
     Deadzone => ("Deadzone", "Zona muerta", "Zona morta");
+    PrecisionSpeed => ("Precision speed · LT / L2", "Velocidad de precisión · LT / L2", "Velocidade de precisão · LT / L2");
+    PrecisionSpeedHelp => ("Pointer speed while LT / L2 is held (5–50%; default: 25%).", "Velocidad del puntero al mantener LT / L2 (5–50%; valor inicial: 25%).", "Velocidade do ponteiro ao segurar LT / L2 (5–50%; padrão: 25%).");
     CustomizeKeyboard => ("Customize QWERTY keyboard", "Personalizar teclado QWERTY", "Personalizar teclado QWERTY");
     WidthPx => ("Width (px)", "Ancho (px)", "Largura (px)");
     Top => ("Top", "Arriba", "Em cima");
@@ -425,6 +414,8 @@ catalog! {
     ToggleKeyboard => ("Open / close custom on-screen keyboard · Desktop mode", "Abrir / cerrar teclado en pantalla · modo Escritorio", "Abrir / fechar teclado visual próprio · modo Desktop");
     SystemLauncher => ("System launcher · Super / Windows", "Lanzador del sistema · Super / Windows", "Lançador do sistema · Super / Windows");
     MovePointer => ("Move pointer", "Mover el puntero", "Mover ponteiro");
+    PrecisionPointer => ("Hold to slow the pointer · adjust in Settings", "Mantén para mover el puntero más despacio · ajusta en Configuración", "Segure para desacelerar o ponteiro · ajuste nas Configurações");
+    LocatePointerShortcut => ("Briefly enlarge the pointer to locate it", "Aumentar brevemente el puntero para localizarlo", "Aumentar o ponteiro por um instante para localizá-lo");
     ScrollPage => ("Scroll page", "Desplazar página", "Rolar página");
     LeftClickDrag => ("Left click · hold to drag", "Clic izquierdo · mantener para arrastrar", "Clique esquerdo · segurar para arrastar");
     RightClick => ("Right click", "Clic derecho", "Clique direito");
