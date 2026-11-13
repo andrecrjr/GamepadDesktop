@@ -175,6 +175,7 @@ impl Platform {
         let key_event = |key: KeyCode, value| InputEvent::new(EventType::KEY.0, key.0, value);
         let result = match action {
             Action::OnScreenKeyboard(_) => return Ok(()),
+            Action::LocatePointer => return Ok(()),
             Action::Move(x, y) => self.pointer.emit(&[
                 InputEvent::new(EventType::RELATIVE.0, Relative::REL_X.0, x),
                 InputEvent::new(EventType::RELATIVE.0, Relative::REL_Y.0, y),

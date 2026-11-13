@@ -48,13 +48,16 @@ pub struct Platform {
     target_cache: [NativeDpadTargetCache; 4],
     paused_cursor: PausedCursor,
     cursor_scale: WindowsCursorScale,
-    pub(crate) magnetic_cursor: crate::magnetic_cursor::MagneticCursor,
     last_target_check: Option<Instant>,
     window_switcher: WindowSwitcherState,
 }
 
 impl Platform {
     pub fn new() -> Result<Self, String> {
+        // A previous process may have exited with global cursor shapes hidden.
+        if let Err(error) = set_cursor_hidden(false) {
+            eprintln!("Falha restaurando visibilidade inicial do cursor: {error}");
+        }
         Ok(Self {
             input: Enigo::new(&Settings::default())
                 .map_err(|error| format!("Falha ao conectar entrada do Windows: {error}"))?,
@@ -68,7 +71,6 @@ impl Platform {
             target_cache: Default::default(),
             paused_cursor: PausedCursor::default(),
             cursor_scale: WindowsCursorScale::new(),
-            magnetic_cursor: Default::default(),
             last_target_check: None,
             window_switcher: WindowSwitcherState::default(),
         })
@@ -109,13 +111,18 @@ impl Platform {
         self.navigation_hook.set_active(
             self.desktop_controls_active && !self.touch_keyboard.uses_native_gamepad(),
         )?;
-        self.paused_cursor
-            .sync(
-                enabled || self.touch_keyboard.visible(),
-                connected,
-                set_cursor_hidden,
-            )
-            .map_err(|error| format!("Falha atualizando cursor do Windows: {error}"))
+        if let Err(error) = self.paused_cursor.sync(
+            enabled || self.touch_keyboard.visible(),
+            connected,
+            set_cursor_hidden,
+        ) {
+            eprintln!("Falha atualizando cursor do Windows: {error}");
+            // Restore any shapes changed before the failure; keep input alive.
+            if let Err(error) = self.paused_cursor.sync(true, false, set_cursor_hidden) {
+                eprintln!("Falha recuperando visibilidade do cursor: {error}");
+            }
+        }
+        Ok(())
     }
 
     pub fn system_keyboard_uses_gamepad(&self) -> bool {
@@ -236,6 +243,7 @@ impl Platform {
         }
         let result = match action {
             Action::OnScreenKeyboard(_) => return Ok(()),
+            Action::LocatePointer => return Ok(()),
             Action::Dpad(direction) => {
                 self.refresh_native_dpad_target(true);
                 if !self.native_dpad.should_synthesize() {
@@ -255,10 +263,7 @@ impl Platform {
                 self.native_dpad.release_dpad();
                 return Ok(());
             }
-            Action::Move(x, y) => {
-                let (x, y) = self.magnetic_cursor.adjust((x, y));
-                self.input.move_mouse(x, y, Coordinate::Rel)
-            }
+            Action::Move(x, y) => self.input.move_mouse(x, y, Coordinate::Rel),
             Action::Scroll(amount) => self.input.scroll(amount, ScrollAxis::Vertical),
             Action::Mouse(button, pressed) => self.input.button(
                 match button {
