@@ -1,3 +1,17 @@
+# [0.7.0](https://github.com/andrecrjr/GamepadDesktop/compare/desktop-v0.6.0...desktop-v0.7.0) (2026-11-13)
+
+
+### Bug Fixes
+
+* **desktop:** restore Windows cursor before forced shutdown ([6ec8028](https://github.com/andrecrjr/GamepadDesktop/commit/6ec8028f870e5408925b73269067ff8289a0618d))
+
+
+### Features
+
+* **desktop:** replace magnetic cursor with precision controls ([6ca533c](https://github.com/andrecrjr/GamepadDesktop/commit/6ca533c922acafac671ea8a4c7fc3db24bf09dbb))
+* **site:** add interactive analog sticks with page scrolling and simulated hover ([755015f](https://github.com/andrecrjr/GamepadDesktop/commit/755015fdee4981d4742d2a3b44a2637e7867c325))
+* **site:** improve landing animation with fluid trajectory and stick physics ([c7b9ad9](https://github.com/andrecrjr/GamepadDesktop/commit/c7b9ad9a36c29b6526bc9443ee0c5f221b02101b))
+
 # [0.6.0](https://github.com/andrecrjr/GamepadDesktop/compare/desktop-v0.5.0...desktop-v0.6.0) (2026-11-01)
 
 
